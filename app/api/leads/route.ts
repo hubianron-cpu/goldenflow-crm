@@ -251,8 +251,13 @@ async function hasExistingAutomatedTask(supabase: LeadWriteClient, leadId: strin
   return Boolean(data);
 }
 
-async function createAutomatedTask(supabase: LeadWriteClient, lead: Lead, ruleType: AutomationRuleType) {
-  if (!lead.id || !lead.user_id || (await hasAutomationLog(supabase, lead.id, ruleType))) {
+async function createAutomatedTask(
+  supabase: LeadWriteClient,
+  lead: Lead,
+  ownerId: string,
+  ruleType: AutomationRuleType,
+) {
+  if (!lead.id || !ownerId || lead.user_id !== ownerId || (await hasAutomationLog(supabase, lead.id, ruleType))) {
     return { created: false };
   }
 
@@ -265,7 +270,7 @@ async function createAutomatedTask(supabase: LeadWriteClient, lead: Lead, ruleTy
   const { data: task, error: taskError } = await supabase
     .from("tasks")
     .insert({
-      assigned_to: lead.user_id,
+      assigned_to: ownerId,
       description: copy.description,
       due_date: getTodayDateValue(),
       is_automated: true,
@@ -273,7 +278,7 @@ async function createAutomatedTask(supabase: LeadWriteClient, lead: Lead, ruleTy
       priority: copy.priority,
       status: "פתוחה",
       title: copy.title,
-      user_id: lead.user_id,
+      user_id: ownerId,
     })
     .select("id, title, linked_lead_id, user_id, assigned_to, status, priority, due_date, is_automated")
     .single();
@@ -299,7 +304,7 @@ async function createAutomatedTask(supabase: LeadWriteClient, lead: Lead, ruleTy
   console.error("AUTO_TASK_LOG_FAILED", getSupabaseErrorMeta(logError));
 
   if (task?.id) {
-    const { error: cleanupError } = await supabase.from("tasks").delete().eq("id", task.id).eq("user_id", lead.user_id);
+    const { error: cleanupError } = await supabase.from("tasks").delete().eq("id", task.id).eq("user_id", ownerId);
 
     if (cleanupError) {
       logSupabaseError(`task_automation.${ruleType}.task_cleanup`, cleanupError);
@@ -313,16 +318,17 @@ async function createAutomatedTask(supabase: LeadWriteClient, lead: Lead, ruleTy
 async function runTaskAutomations(
   supabase: LeadWriteClient,
   lead: Lead,
+  ownerId: string,
   options: { newLead?: boolean } = {},
 ) {
   const results = [];
 
   if (options.newLead) {
-    results.push(await createAutomatedTask(supabase, lead, "new_lead"));
+    results.push(await createAutomatedTask(supabase, lead, ownerId, "new_lead"));
   }
 
   if (isMoreThan24HoursAgo(lead.last_contact_date)) {
-    results.push(await createAutomatedTask(supabase, lead, "followup_24h"));
+    results.push(await createAutomatedTask(supabase, lead, ownerId, "followup_24h"));
   }
 
   return results.find((result) => result?.error);
@@ -456,7 +462,7 @@ export async function POST(request: Request) {
       return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
     }
 
-    const automationError = await runTaskAutomations(writeSupabase, data as Lead);
+    const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId);
 
     return NextResponse.json(
       {
@@ -494,7 +500,7 @@ export async function POST(request: Request) {
   }
 
   console.log("LEAD_CREATED", data);
-  const automationError = await runTaskAutomations(writeSupabase, data as Lead, { newLead: true });
+  const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId, { newLead: true });
 
   return NextResponse.json(
     {
@@ -635,7 +641,7 @@ export async function PATCH(request: Request) {
     return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
   }
 
-  const automationError = await runTaskAutomations(context.supabase as unknown as LeadWriteClient, data as Lead);
+  const automationError = await runTaskAutomations(context.supabase as unknown as LeadWriteClient, data as Lead, context.user.id);
 
   return NextResponse.json(
     {
