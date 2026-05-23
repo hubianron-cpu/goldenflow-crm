@@ -1296,7 +1296,7 @@ export function DashboardMetrics() {
           },
         ].map(({ accent, icon: Icon, label, meta, rawValue, sublabel, tone, value }) => (
           <article
-            className={`panel group relative flex min-h-[230px] flex-col justify-between overflow-hidden bg-gradient-to-br ${accent} p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:-translate-y-1.5 hover:scale-[1.01] hover:border-gold/35 hover:shadow-[0_30px_90px_rgba(0,0,0,0.36),0_0_42px_rgba(201,162,39,0.18)] ${rawValue === highestMoneyKpi && rawValue > 0 ? "border-gold/45 shadow-[0_28px_90px_rgba(0,0,0,0.34),0_0_46px_rgba(201,162,39,0.20)]" : ""}`}
+            className={`panel group relative flex min-h-[230px] flex-col justify-between overflow-visible bg-gradient-to-br ${accent} p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28),inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:-translate-y-1.5 hover:scale-[1.01] hover:border-gold/35 hover:shadow-[0_30px_90px_rgba(0,0,0,0.36),0_0_42px_rgba(201,162,39,0.18)] ${rawValue === highestMoneyKpi && rawValue > 0 ? "border-gold/45 shadow-[0_28px_90px_rgba(0,0,0,0.34),0_0_46px_rgba(201,162,39,0.20)]" : ""}`}
             key={label}
           >
             <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent opacity-0 transition group-hover:opacity-100" />
@@ -1309,8 +1309,8 @@ export function DashboardMetrics() {
               </div>
               <p className="mt-3 min-h-8 text-xs leading-4 text-zinc-500">{sublabel}</p>
             </div>
-            <div className="mt-6 min-w-0 overflow-visible">
-              <p className="number-rise max-w-full whitespace-nowrap text-[clamp(2rem,4.2vw,3.5rem)] font-black leading-none tracking-tight text-white drop-shadow-[0_0_18px_rgba(201,162,39,0.12)]">{value}</p>
+            <div className="mt-6 min-w-0 max-w-full overflow-visible px-1 text-center">
+              <p className="number-rise block max-w-full whitespace-nowrap text-center text-[clamp(1.75rem,3.1vw,3rem)] font-black leading-[1.05] tracking-[-0.03em] text-white drop-shadow-[0_0_18px_rgba(201,162,39,0.12)] [direction:ltr]">{value}</p>
               <p className="mt-4 min-h-10 text-xs leading-5 text-zinc-500">{meta}</p>
             </div>
           </article>

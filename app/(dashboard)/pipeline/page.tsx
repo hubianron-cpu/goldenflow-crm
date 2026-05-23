@@ -5,7 +5,7 @@ export default function PipelinePage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Pipeline"
+        eyebrow="SALES FLOW"
         title="מסלול המכירה"
         description="מעקב מהיר אחר שלבי המכירה, שווי העסקאות והתקדמות כל ליד בלחיצה אחת."
       />
