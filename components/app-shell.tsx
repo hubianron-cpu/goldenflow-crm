@@ -15,10 +15,10 @@ export function AppShell({
   userEmail: string;
 }) {
   return (
-    <div className="relative min-h-screen overflow-hidden px-3 py-4 sm:px-5 lg:px-6">
+    <div className="relative min-h-screen max-w-full overflow-x-clip px-3 py-4 sm:px-5 lg:px-6">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-80 bg-[radial-gradient(circle_at_85%_0%,rgba(201,162,39,0.16),transparent_34rem)]" />
-      <div className="relative mx-auto grid w-full max-w-[1440px] gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
-        <aside className="relative h-fit w-full overflow-hidden rounded-[28px] border border-gold/15 bg-black/55 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl lg:sticky lg:top-6 lg:min-h-[calc(100vh-3rem)]">
+      <div className="relative mx-auto grid w-full max-w-[1440px] min-w-0 gap-5 lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="relative h-fit w-full max-w-full overflow-hidden rounded-[28px] border border-gold/15 bg-black/55 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl lg:sticky lg:top-6 lg:min-h-[calc(100vh-3rem)]">
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/55 to-transparent" />
           <div className="pointer-events-none absolute -right-12 top-8 h-40 w-40 rounded-full bg-gold/10 blur-3xl" />
 
@@ -58,7 +58,7 @@ export function AppShell({
           </form>
         </aside>
 
-        <main className="mx-auto w-full max-w-[1180px] pb-24 lg:pb-8">{children}</main>
+        <main className="mx-auto w-full max-w-[1180px] min-w-0 pb-24 lg:pb-8">{children}</main>
       </div>
     </div>
   );

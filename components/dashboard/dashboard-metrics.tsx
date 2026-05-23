@@ -729,7 +729,7 @@ export function DashboardMetrics() {
   const highestMoneyKpi = Math.max(metrics.totalValue, metrics.closableRevenue, metrics.monthlyRevenue, metrics.moneyAtRisk);
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-full space-y-6 overflow-x-clip">
       <StatusMessage error={error} success={success} />
       {actionImpact ? (
         <div className="number-rise rounded-2xl border border-gold/25 bg-gold/10 p-4 text-sm font-semibold text-gold-soft shadow-[0_0_35px_rgba(201,162,39,0.12)]">
@@ -772,13 +772,13 @@ export function DashboardMetrics() {
         </div>
       ) : null}
 
-      <section className="relative mx-auto overflow-hidden rounded-[32px] border border-gold/20 bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.18),rgba(8,8,8,0.96)_48%,rgba(5,5,5,0.98))] px-5 py-14 text-center shadow-[0_30px_100px_rgba(0,0,0,0.42),0_0_58px_rgba(201,162,39,0.12)] sm:px-8 sm:py-16">
+      <section className="relative mx-auto w-full max-w-full overflow-hidden rounded-[32px] border border-gold/20 bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.18),rgba(8,8,8,0.96)_48%,rgba(5,5,5,0.98))] px-4 py-10 text-center shadow-[0_30px_100px_rgba(0,0,0,0.42),0_0_58px_rgba(201,162,39,0.12)] sm:px-8 sm:py-16">
         <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
         <div className="relative mx-auto flex max-w-[900px] flex-col items-center gap-5">
-          <h1 className="max-w-[760px] text-4xl font-black leading-tight tracking-tight text-white sm:text-5xl lg:text-[56px]">
+          <h1 className="max-w-[760px] break-words text-[clamp(2rem,9vw,3rem)] font-black leading-[1.14] tracking-tight text-white sm:text-5xl sm:leading-tight lg:text-[56px]">
             לסגור יותר עסקאות - עם סדר עבודה שמייצר כסף כל יום
           </h1>
-          <p className="max-w-[600px] text-lg leading-8 text-zinc-300 sm:text-xl">
+          <p className="max-w-[600px] break-words text-base leading-7 text-zinc-300 sm:text-xl sm:leading-8">
             המערכת שמראה לך מי הלקוח הבא שלך - וכמה כסף מחכה לך
           </p>
           <button
@@ -792,23 +792,23 @@ export function DashboardMetrics() {
       </section>
 
       {priorityActionLead ? (
-        <section className="mx-auto max-w-4xl rounded-[28px] border border-gold/30 bg-[linear-gradient(135deg,rgba(201,162,39,0.16),rgba(17,18,20,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28),0_0_34px_rgba(201,162,39,0.14)] sm:p-5">
+        <section className="mx-auto w-full max-w-4xl rounded-[28px] border border-gold/30 bg-[linear-gradient(135deg,rgba(201,162,39,0.16),rgba(17,18,20,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28),0_0_34px_rgba(201,162,39,0.14)] sm:p-5">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <p className="text-sm font-semibold text-gold-soft">👉 הפעולה הבאה שלך:</p>
-              <h2 className="mt-2 truncate text-2xl font-black tracking-tight text-white">
+              <h2 className="mt-2 break-words text-xl font-black tracking-tight text-white sm:text-2xl">
                 📞 התקשר ל{priorityActionLead.name} - שווה {formatMoney(priorityActionLead.value)}
               </h2>
-              <p className="mt-2 text-sm text-zinc-400">
+              <p className="mt-2 break-words text-sm text-zinc-400">
                 {getUrgencyState(priorityActionLead).label} · {getActionReason(priorityActionLead)} · 💰 שווה {formatMoney(priorityActionLead.value)} אם תסגור היום
               </p>
             </div>
             {priorityActionLead.phone ? (
-              <a className="button-primary min-h-12 shrink-0 px-7" href={`tel:${priorityActionLead.phone}`} onClick={markUserAction}>
+              <a className="button-primary min-h-12 w-full shrink-0 px-7 sm:w-auto" href={`tel:${priorityActionLead.phone}`} onClick={markUserAction}>
                 בצע עכשיו
               </a>
             ) : (
-              <Link className="button-primary min-h-12 shrink-0 px-7" href="/leads" onClick={markUserAction}>
+              <Link className="button-primary min-h-12 w-full shrink-0 px-7 sm:w-auto" href="/leads" onClick={markUserAction}>
                 בצע עכשיו
               </Link>
             )}
@@ -879,7 +879,7 @@ export function DashboardMetrics() {
       </section>
 
       <section
-        className={`relative overflow-hidden rounded-[32px] border border-gold/25 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.24),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.44)] sm:p-7 ${focusMode ? "min-h-[calc(100vh-3rem)]" : ""}`}
+        className={`relative w-full max-w-full overflow-hidden rounded-[32px] border border-gold/25 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.24),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.44)] sm:p-7 ${focusMode ? "min-h-[100dvh] lg:min-h-[calc(100vh-3rem)]" : ""}`}
         id="daily-command-center"
       >
         <div className="absolute inset-x-10 top-0 h-px bg-gradient-to-l from-transparent via-gold/70 to-transparent" />
@@ -887,7 +887,7 @@ export function DashboardMetrics() {
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">
             {focusMode ? "Focused Execution" : "Sales Command Center"}
           </p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-5xl">
+          <h2 className="mt-3 text-[clamp(1.9rem,8vw,3rem)] font-semibold tracking-tight sm:text-5xl">
             {focusMode ? "מצב סגירה 🔥" : "מערכת סגירה יומית 🔥"}
           </h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-300 sm:text-base">
@@ -927,22 +927,22 @@ export function DashboardMetrics() {
         </div>
 
         {nextActionLead ? (
-          <div className="mx-auto mt-9 flex max-w-3xl flex-col items-center justify-center gap-5">
+          <div className="mx-auto mt-9 flex w-full max-w-3xl flex-col items-center justify-center gap-5">
             <div className="text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">Next Best Action</p>
-              <h3 className="mt-2 text-2xl font-semibold tracking-tight sm:text-4xl">🎯 הפעולה הכי חשובה עכשיו</h3>
+              <h3 className="mt-2 text-[clamp(1.5rem,7vw,2.25rem)] font-semibold tracking-tight sm:text-4xl">🎯 הפעולה הכי חשובה עכשיו</h3>
             </div>
-            <div className="number-rise w-full rounded-[30px] border border-gold/30 bg-black/35 p-5 text-center shadow-[0_0_60px_rgba(201,162,39,0.14)] sm:p-8">
-              <div className="mx-auto flex max-w-2xl flex-col items-center justify-center gap-6">
+            <div className="number-rise w-full max-w-full rounded-[30px] border border-gold/30 bg-black/35 p-4 text-center shadow-[0_0_60px_rgba(201,162,39,0.14)] sm:p-8">
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-6">
                 <div className="w-full text-center">
                   <div className="flex flex-wrap items-center justify-center gap-2">
                     <span className="text-2xl">{getUrgencyIcon(nextActionLead)}</span>
-                    <h3 className={focusMode ? "text-4xl font-semibold sm:text-6xl" : "text-2xl font-semibold sm:text-3xl"}>{nextActionLead.name}</h3>
+                    <h3 className={`${focusMode ? "text-[clamp(2rem,10vw,3.75rem)] sm:text-6xl" : "text-[clamp(1.5rem,7vw,2rem)] sm:text-3xl"} min-w-0 break-words font-semibold [overflow-wrap:anywhere]`}>{nextActionLead.name}</h3>
                     <span className={`rounded-full border px-3 py-1 text-xs ${getPriority(nextActionLead).className}`}>
                       {getLeadTemperature(nextActionLead).label}
                     </span>
                   </div>
-                  <p className={focusMode ? "mt-5 text-6xl font-semibold tracking-tight text-gold-soft sm:text-8xl" : "mt-3 text-4xl font-semibold tracking-tight text-gold-soft sm:text-5xl"}>
+                  <p className={`${focusMode ? "mt-5 text-[clamp(3rem,15vw,5rem)] sm:text-8xl" : "mt-3 text-[clamp(2.25rem,12vw,3.5rem)] sm:text-5xl"} whitespace-nowrap font-semibold tracking-tight text-gold-soft [direction:ltr]`}>
                     {formatMoney(nextActionLead.value)}
                   </p>
                   <div className="mt-5 flex flex-wrap justify-center gap-2">
@@ -950,7 +950,7 @@ export function DashboardMetrics() {
                     <span className={`rounded-full border px-3 py-1 text-sm ${getPriority(nextActionLead).className}`}>{getPriority(nextActionLead).label}</span>
                     <span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-sm text-gold-soft">ציון {getDailyPriorityScore(nextActionLead)}</span>
                   </div>
-                  <div className="mx-auto mt-6 grid max-w-2xl gap-3 text-center text-sm sm:grid-cols-2">
+                  <div className="mx-auto mt-6 grid w-full max-w-2xl gap-3 text-center text-sm sm:grid-cols-2">
                     <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
                       טלפון: <strong className="text-white">{nextActionLead.phone || "אין טלפון"}</strong>
                     </p>
@@ -998,7 +998,7 @@ export function DashboardMetrics() {
                   <p className="mt-1 text-xs text-zinc-500">פוטנציאל נשאר</p>
                 </div>
               </div>
-              <div className="mx-auto grid max-w-2xl gap-3 sm:grid-cols-2">
+              <div className="mx-auto grid w-full max-w-2xl gap-3 sm:grid-cols-2">
               {nextActionLead.phone ? (
                 <a
                   className="button-secondary min-h-14 gap-2 px-5 py-3 text-base"
@@ -1040,7 +1040,7 @@ export function DashboardMetrics() {
               </button>
               </div>
             </div>
-            <div className="fixed inset-x-3 bottom-3 z-40 grid grid-cols-2 gap-2 rounded-2xl border border-gold/20 bg-zinc-950/95 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.55)] backdrop-blur md:hidden">
+            <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-gold/20 bg-zinc-950/95 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur md:hidden">
               {nextActionLead.phone ? (
                 <a className="button-secondary min-h-14 text-base" href={`tel:${nextActionLead.phone}`} onClick={markUserAction}>
                   📞 להתקשר
@@ -1079,7 +1079,7 @@ export function DashboardMetrics() {
 
       {!focusMode ? (
         <>
-      <section className="relative overflow-hidden rounded-[30px] border border-gold/20 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-5 shadow-[0_28px_90px_rgba(0,0,0,0.42)] sm:p-7">
+      <section className="relative w-full max-w-full overflow-hidden rounded-[30px] border border-gold/20 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] sm:p-7">
         <div className="mx-auto max-w-3xl text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">Daily Closing Board</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-4xl">לוח סגירה יומי</h2>
@@ -1110,7 +1110,7 @@ export function DashboardMetrics() {
               key: "close",
               label: "🔥 כאן הכסף שלך",
               microcopy: "לידים חמים - כאן הכסף נמצא",
-              tone: "scale-[1.05] border-gold/60 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.34),rgba(201,162,39,0.12)_42%,rgba(0,0,0,0.16))] shadow-[0_0_68px_rgba(201,162,39,0.28)]",
+              tone: "border-gold/60 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.34),rgba(201,162,39,0.12)_42%,rgba(0,0,0,0.16))] shadow-[0_0_68px_rgba(201,162,39,0.28)] xl:scale-[1.05]",
               leads: metrics.dailyClosing.close,
             },
             {
@@ -1121,7 +1121,7 @@ export function DashboardMetrics() {
               leads: metrics.dailyClosing.followUp,
             },
           ].map((group) => (
-            <div className={`rounded-[24px] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24),0_0_38px_rgba(201,162,39,0.12)] ${group.tone}`} key={group.key}>
+            <div className={`w-full max-w-full rounded-[24px] border p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_24px_70px_rgba(0,0,0,0.24),0_0_38px_rgba(201,162,39,0.12)] ${group.tone}`} key={group.key}>
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div>
                   <h3 className="font-semibold">{group.label}</h3>
@@ -1143,7 +1143,7 @@ export function DashboardMetrics() {
                         className={`rounded-2xl border border-white/[0.07] bg-black/20 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition duration-200 hover:-translate-y-0.5 hover:border-gold/25 hover:bg-white/[0.04] hover:shadow-[0_18px_42px_rgba(0,0,0,0.20),0_0_24px_rgba(201,162,39,0.08)] ${expanded ? "bg-black/35" : ""}`}
                         key={lead.id}
                       >
-                        <div className="grid grid-cols-[1fr_auto] items-start gap-3">
+                        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
                               <p className="truncate text-sm font-semibold">{lead.name}</p>
@@ -1166,7 +1166,7 @@ export function DashboardMetrics() {
                               </p>
                             ) : null}
                           </div>
-                          <p className="text-xl font-black leading-none text-gold-soft drop-shadow-[0_0_16px_rgba(201,162,39,0.18)]">{formatMoney(lead.value)}</p>
+                          <p className="shrink-0 whitespace-nowrap text-lg font-black leading-none text-gold-soft drop-shadow-[0_0_16px_rgba(201,162,39,0.18)] sm:text-xl">{formatMoney(lead.value)}</p>
                         </div>
 
                         <div className="mt-3 flex max-w-full flex-wrap gap-2">
