@@ -379,8 +379,6 @@ export async function GET() {
     return context.error;
   }
 
-  await markInactiveLeadsForReactivation(context.supabase, context.user.id);
-
   const { data, error } = await context.supabase
     .from("leads")
     .select(leadSelect)
