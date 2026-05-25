@@ -21,14 +21,17 @@ type RoiMetrics = {
   costPerSale: number | null;
   estimatedRevenue: number;
   netProfit: number;
+  paybackDays: number | null;
   roiMultiplier: number | null;
   status: string;
   statusClassName: string;
 };
 
+const categoryOptions = ["פרסום", "תוכנה", "עובדים", "אוטומציה", "ציוד", "ייעוץ", "אחר"];
+
 const emptyForm: RoiForm = {
   average_sale_value: "0",
-  category: "",
+  category: "אחר",
   leads_count: "0",
   monthly_cost: "0",
   name: "",
@@ -58,6 +61,10 @@ function formatPercent(value: number | null) {
   return value === null || !Number.isFinite(value) ? "-" : `${value.toFixed(1)}%`;
 }
 
+function formatDays(value: number | null) {
+  return value === null || !Number.isFinite(value) ? "-" : `${value} ימים`;
+}
+
 function toSafeNumber(value: string) {
   if (!value.trim()) {
     return 0;
@@ -73,10 +80,7 @@ function toSafeInteger(value: string) {
 }
 
 function isOperationalCategory(category: string) {
-  const normalized = category.trim().toLowerCase();
-  return ["תפעול", "כלי", "תוכנה", "שירות", "עובד", "מערכת", "software", "tool", "ops"].some((token) =>
-    normalized.includes(token),
-  );
+  return ["תוכנה", "אוטומציה", "ציוד"].includes(category.trim());
 }
 
 function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "leads_count" | "monthly_cost" | "sales_count">): RoiMetrics {
@@ -90,6 +94,7 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
   const costPerLead = leadsCount > 0 ? monthlyCost / leadsCount : null;
   const costPerSale = salesCount > 0 ? monthlyCost / salesCount : null;
   const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : null;
+  const paybackDays = monthlyCost > 0 && estimatedRevenue > 0 ? Math.round((monthlyCost / estimatedRevenue) * 30) : null;
 
   if (monthlyCost === 0 && estimatedRevenue > 0) {
     return {
@@ -98,6 +103,7 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
       costPerSale,
       estimatedRevenue,
       netProfit,
+      paybackDays,
       roiMultiplier,
       status: "רווחי מאוד",
       statusClassName: "border-success/30 bg-success/15 text-green-100",
@@ -111,9 +117,10 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
       costPerSale,
       estimatedRevenue,
       netProfit,
+      paybackDays,
       roiMultiplier,
       status: "תפעולי",
-      statusClassName: "border-blue/30 bg-blue/15 text-blue-100",
+      statusClassName: "border-gold/20 bg-gold/10 text-gold-soft",
     };
   }
 
@@ -124,9 +131,10 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
       costPerSale,
       estimatedRevenue,
       netProfit,
+      paybackDays,
       roiMultiplier,
       status: "רווחי",
-      statusClassName: "border-gold/35 bg-gold/15 text-gold-soft",
+      statusClassName: "border-success/30 bg-success/15 text-green-100",
     };
   }
 
@@ -137,9 +145,24 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
       costPerSale,
       estimatedRevenue,
       netProfit,
+      paybackDays,
       roiMultiplier,
       status: "גבולי",
       statusClassName: "border-gold/20 bg-gold/10 text-yellow-100",
+    };
+  }
+
+  if (roiMultiplier === null) {
+    return {
+      conversionRate,
+      costPerLead,
+      costPerSale,
+      estimatedRevenue,
+      netProfit,
+      paybackDays,
+      roiMultiplier,
+      status: "-",
+      statusClassName: "border-white/10 bg-white/[0.04] text-zinc-300",
     };
   }
 
@@ -149,6 +172,7 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
     costPerSale,
     estimatedRevenue,
     netProfit,
+    paybackDays,
     roiMultiplier,
     status: "מפסיד",
     statusClassName: "border-danger/30 bg-danger/15 text-red-100",
@@ -250,7 +274,12 @@ export function RoiCenter() {
   const totalNetProfit = totalRevenue - totalCost;
   const overallRoi = totalCost > 0 ? totalRevenue / totalCost : null;
   const bestTool = sortedTools[0] ?? null;
-  const weakestTool = [...tools].sort((a, b) => getMetrics(a).netProfit - getMetrics(b).netProfit)[0] ?? null;
+  const losingTools = tools.filter((tool) => getMetrics(tool).status === "מפסיד");
+  const weakestTool = [...losingTools].sort((a, b) => {
+    const aMetrics = getMetrics(a);
+    const bMetrics = getMetrics(b);
+    return aMetrics.netProfit - bMetrics.netProfit || (aMetrics.roiMultiplier ?? 0) - (bMetrics.roiMultiplier ?? 0);
+  })[0] ?? null;
   const maxComparisonValue = Math.max(
     1,
     ...tools.flatMap((tool) => [Number(tool.monthly_cost) || 0, getMetrics(tool).estimatedRevenue]),
@@ -281,6 +310,10 @@ export function RoiCenter() {
     setForm(emptyForm);
     setEditingId("");
   }
+
+  const visibleCategoryOptions = categoryOptions.includes(form.category) || !form.category
+    ? categoryOptions
+    : [form.category, ...categoryOptions];
 
   function submitTool() {
     setError("");
@@ -362,8 +395,17 @@ export function RoiCenter() {
     { label: "סך הכנסות משוערות", value: formatMoney(totalRevenue), tone: "card-money" },
     { label: "רווח נקי משוער", value: formatMoney(totalNetProfit), tone: totalNetProfit >= 0 ? "card-success" : "card-danger" },
     { label: "ROI כללי", value: formatRoi(overallRoi), tone: "card-default" },
-    { label: "הכלי הכי רווחי", value: bestTool ? bestTool.name : "-", tone: "card-money" },
-    { label: "הכלי הכי חלש", value: weakestTool ? weakestTool.name : "-", tone: "card-danger" },
+    {
+      label: "הכלי הכי רווחי",
+      meta: bestTool ? `רווח נקי: ${formatMoney(getMetrics(bestTool).netProfit)}` : "",
+      value: bestTool ? bestTool.name : "-",
+      tone: "card-money",
+    },
+    {
+      label: weakestTool ? "הכלי הכי חלש" : "אין כרגע כלי מפסיד",
+      value: weakestTool ? weakestTool.name : "כל הכלים כרגע רווחיים",
+      tone: "card-danger",
+    },
   ];
 
   return (
@@ -382,6 +424,7 @@ export function RoiCenter() {
           <article className={`${card.tone} flex min-h-32 flex-col justify-between p-5`} key={card.label}>
             <p className="text-xs font-bold text-zinc-400">{card.label}</p>
             <p className="mt-5 break-words text-2xl font-black leading-tight text-white sm:text-3xl">{card.value}</p>
+            {"meta" in card && card.meta ? <p className="mt-2 text-xs font-bold text-zinc-400">{card.meta}</p> : null}
           </article>
         ))}
       </section>
@@ -413,7 +456,13 @@ export function RoiCenter() {
             </label>
             <label className="text-sm font-bold text-zinc-300">
               קטגוריה
-              <input className="field mt-2" onChange={(event) => updateField("category", event.target.value)} value={form.category} />
+              <select className="field mt-2" onChange={(event) => updateField("category", event.target.value)} value={form.category || "אחר"}>
+                {visibleCategoryOptions.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-bold text-zinc-300">
@@ -461,7 +510,7 @@ export function RoiCenter() {
               <p className="mt-6 rounded-2xl border border-white/10 bg-black/20 p-5 text-center text-sm text-zinc-400">טוען נתוני ROI...</p>
             ) : sortedTools.length === 0 ? (
               <p className="mt-6 rounded-2xl border border-dashed border-gold/20 bg-gold/5 p-6 text-center text-sm leading-7 text-zinc-300">
-                עדיין לא הוספת כלים. הוסף את הכלי הראשון שלך כדי להבין מה באמת מחזיר השקעה בעסק.
+                הוסף את הכלי הראשון שלך כדי להבין איפה הכסף באמת חוזר אליך.
               </p>
             ) : (
               <div className="mt-6 grid gap-4">
@@ -489,6 +538,7 @@ export function RoiCenter() {
                         <Metric label="עלות למכירה" value={formatOptionalMoney(metrics.costPerSale)} />
                         <Metric label="אחוז המרה" value={formatPercent(metrics.conversionRate)} />
                         <Metric label="מכירות / לידים" value={`${tool.sales_count} / ${tool.leads_count}`} />
+                        <Metric label="החזר השקעה ממוצע" value={formatDays(metrics.paybackDays)} />
                       </div>
 
                       {tool.notes ? <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-zinc-400">{tool.notes}</p> : null}
@@ -510,7 +560,7 @@ export function RoiCenter() {
 
           <div className="panel p-5 sm:p-6">
             <p className="text-xs font-black uppercase tracking-[0.22em] text-gold-soft">Comparison</p>
-            <h2 className="mt-2 text-2xl font-black text-white">עלות מול הכנסה משוערת</h2>
+            <h2 className="mt-2 text-2xl font-black text-white">עלות מול הכנסה לפי כלי</h2>
             <div className="mt-6 space-y-4">
               {sortedTools.length === 0 ? (
                 <p className="rounded-2xl border border-dashed border-white/10 p-5 text-center text-sm text-zinc-500">ההשוואה תופיע אחרי הוספת כלי ראשון.</p>
