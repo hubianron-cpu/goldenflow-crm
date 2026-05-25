@@ -179,6 +179,45 @@ export type Database = {
           },
         ];
       };
+      roi_tools: {
+        Row: {
+          average_sale_value: number;
+          category: string;
+          created_at: string;
+          id: string;
+          leads_count: number;
+          monthly_cost: number;
+          name: string;
+          notes: string;
+          sales_count: number;
+          user_id: string;
+        };
+        Insert: {
+          average_sale_value?: number;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          leads_count?: number;
+          monthly_cost?: number;
+          name: string;
+          notes?: string;
+          sales_count?: number;
+          user_id: string;
+        };
+        Update: {
+          average_sale_value?: number;
+          category?: string;
+          created_at?: string;
+          id?: string;
+          leads_count?: number;
+          monthly_cost?: number;
+          name?: string;
+          notes?: string;
+          sales_count?: number;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       task_automations_log: {
         Row: {
           created_at: string;
