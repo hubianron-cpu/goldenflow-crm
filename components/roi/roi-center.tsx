@@ -21,13 +21,13 @@ type RoiMetrics = {
   costPerLead: number | null;
   costPerSale: number | null;
   estimatedRevenue: number;
+  paybackLabel: string;
   netProfit: number;
   paybackDays: number | null;
-  roiMultiplier: number | null;
   roiPercentage: number | null;
+  recommendation: string;
   status: string;
   statusClassName: string;
-  insight: string;
 };
 
 const categoryOptions = ["פרסום", "תוכנה", "עובדים", "אוטומציה", "ציוד", "ייעוץ", "שיווק", "תפעול", "תוכן", "אחר"];
@@ -44,14 +44,17 @@ const emptyForm: RoiForm = {
   sales_count: "0",
 };
 
-const moneyFormatter = new Intl.NumberFormat("he-IL", {
-  currency: "ILS",
-  maximumFractionDigits: 0,
-  style: "currency",
-});
-
 function formatMoney(value: number) {
-  return moneyFormatter.format(Number.isFinite(value) ? value : 0);
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const absoluteValue = Math.abs(safeValue);
+  const shouldShowDecimals = absoluteValue > 0 && absoluteValue < 10;
+
+  return new Intl.NumberFormat("he-IL", {
+    currency: "ILS",
+    maximumFractionDigits: shouldShowDecimals ? 2 : 0,
+    minimumFractionDigits: shouldShowDecimals ? 2 : 0,
+    style: "currency",
+  }).format(safeValue);
 }
 
 function formatOptionalMoney(value: number | null) {
@@ -59,11 +62,17 @@ function formatOptionalMoney(value: number | null) {
 }
 
 function formatPercent(value: number | null) {
-  return value === null || !Number.isFinite(value) ? "-" : `${value.toFixed(1)}%`;
+  if (value === null || !Number.isFinite(value)) {
+    return "-";
+  }
+
+  const absoluteValue = Math.abs(value);
+  const fractionDigits = absoluteValue < 1 ? 2 : absoluteValue <= 10 ? 1 : value % 1 === 0 ? 0 : 1;
+  return `${value.toFixed(fractionDigits)}%`;
 }
 
-function formatDays(value: number | null) {
-  return value === null || !Number.isFinite(value) ? "-" : `${value} ימים`;
+function formatConversionRate(value: number | null) {
+  return value === null || !Number.isFinite(value) ? "אין מספיק נתונים" : formatPercent(value);
 }
 
 function toSafeNumber(value: string) {
@@ -80,28 +89,95 @@ function toSafeInteger(value: string) {
   return Number.isFinite(number) ? Math.trunc(number) : Number.NaN;
 }
 
-function isOperationalCategory(category: string) {
-  return ["תוכנה", "אוטומציה", "ציוד"].includes(category.trim());
+function getPaybackLabel(monthlyCost: number, estimatedRevenue: number, netProfit: number, paybackDays: number | null) {
+  if (monthlyCost === 0) {
+    return "אין עלות";
+  }
+
+  if (estimatedRevenue <= 0 || paybackDays === null || !Number.isFinite(paybackDays)) {
+    return "עדיין לא החזיר";
+  }
+
+  if (paybackDays <= 1) {
+    return "פחות מיום";
+  }
+
+  if (paybackDays <= 30) {
+    return netProfit > 0 ? `החזיר תוך ${paybackDays} ימים` : `${paybackDays} ימים`;
+  }
+
+  return `${Math.ceil(paybackDays / 30)} חודשים`;
 }
 
-function getInsight(monthlyCost: number, netProfit: number, roiPercentage: number | null) {
+function getStatus(roiPercentage: number | null) {
+  if (roiPercentage === null || !Number.isFinite(roiPercentage)) {
+    return {
+      status: "-",
+      statusClassName: "border-white/10 bg-white/[0.04] text-zinc-300",
+    };
+  }
+
+  if (roiPercentage > 50) {
+    return {
+      status: "🟢 רווחי",
+      statusClassName: "border-success/30 bg-success/15 text-green-100",
+    };
+  }
+
+  if (roiPercentage >= -10) {
+    return {
+      status: "🟡 גבולי",
+      statusClassName: "border-gold/25 bg-gold/10 text-yellow-100",
+    };
+  }
+
+  return {
+    status: "🔴 מפסיד",
+    statusClassName: "border-danger/30 bg-danger/15 text-red-100",
+  };
+}
+
+function getRecommendation(
+  monthlyCost: number,
+  estimatedRevenue: number,
+  roiPercentage: number | null,
+  conversionRate: number | null,
+  resultQuantity: number,
+  conversionsCount: number,
+) {
   if (monthlyCost === 0) {
     return "לא הוזנה עלות חודשית, לכן אי אפשר לחשב ROI אמיתי.";
   }
 
-  if (roiPercentage !== null && roiPercentage >= 200) {
-    return "זה אחד הכלים הכי משתלמים בעסק כרגע.";
+  if (resultQuantity >= 1000 && conversionsCount > 0 && conversionRate !== null && conversionRate < 1) {
+    return "יש הרבה תוצאות אבל מעט המרות - הבעיה כנראה לא בכמות אלא באיכות או בסגירה.";
   }
 
-  if (netProfit > 0) {
+  if (roiPercentage !== null && roiPercentage > 100) {
+    return "זה אחד הכלים המשתלמים בעסק כרגע - שווה לבדוק אם אפשר להגדיל שימוש או השקעה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage > 0 && conversionRate !== null && conversionRate < 2) {
+    return "הכלי מחזיר את עצמו, אבל אחוז ההמרה נמוך - כדאי לשפר פולואפ או תהליך מכירה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage >= -10 && roiPercentage <= 50) {
+    return "הכלי קרוב לאיזון - כדאי לבדוק אם אפשר להוריד עלות או לשפר שימוש.";
+  }
+
+  if (roiPercentage !== null && roiPercentage < -10) {
+    return "לפי הנתונים כרגע, ההוצאה לא מחזירה את עצמה - כדאי לבדוק אם להפסיק, לשפר או למדוד מחדש.";
+  }
+
+  if (estimatedRevenue > 0) {
     return "ההוצאה הזו מחזירה את עצמה.";
   }
 
-  if (roiPercentage !== null && roiPercentage >= -10 && roiPercentage < 10) {
-    return "הכלי קרוב לאיזון - כדאי לבדוק אם אפשר לשפר שימוש או להוריד עלות.";
-  }
-
   return "ההוצאה כרגע לא מחזירה את עצמה לפי הנתונים שהוזנו.";
+}
+
+function shouldUseConversionsForReturn(resultType: string) {
+  return ["לידים", "פגישות שנקבעו"].includes(resultType.trim());
 }
 
 function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "leads_count" | "monthly_cost" | "result_type" | "sales_count">): RoiMetrics {
@@ -109,95 +185,17 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
   const leadsCount = Number(tool.leads_count) || 0;
   const salesCount = Number(tool.sales_count) || 0;
   const averageSaleValue = Number(tool.average_sale_value) || 0;
-  const estimatedRevenue = leadsCount * averageSaleValue;
+  const resultType = tool.result_type || "לידים";
+  const estimatedRevenue = (shouldUseConversionsForReturn(resultType) ? salesCount : leadsCount) * averageSaleValue;
   const netProfit = estimatedRevenue - monthlyCost;
-  const roiMultiplier = monthlyCost > 0 ? estimatedRevenue / monthlyCost : null;
   const roiPercentage = monthlyCost > 0 ? (netProfit / monthlyCost) * 100 : null;
   const costPerLead = leadsCount > 0 ? monthlyCost / leadsCount : null;
   const costPerSale = salesCount > 0 ? monthlyCost / salesCount : null;
   const conversionRate = leadsCount > 0 ? (salesCount / leadsCount) * 100 : null;
   const paybackDays = monthlyCost > 0 && estimatedRevenue > 0 ? Math.round((monthlyCost / estimatedRevenue) * 30) : null;
-  const insight = getInsight(monthlyCost, netProfit, roiPercentage);
-
-  if (monthlyCost === 0 && estimatedRevenue > 0) {
-    return {
-      conversionRate,
-      costPerLead,
-      costPerSale,
-      estimatedRevenue,
-      netProfit,
-      paybackDays,
-      roiMultiplier,
-      roiPercentage,
-      status: "רווחי מאוד",
-      statusClassName: "border-success/30 bg-success/15 text-green-100",
-      insight,
-    };
-  }
-
-  if (estimatedRevenue === 0 && isOperationalCategory(tool.category)) {
-    return {
-      conversionRate,
-      costPerLead,
-      costPerSale,
-      estimatedRevenue,
-      netProfit,
-      paybackDays,
-      roiMultiplier,
-      roiPercentage,
-      status: "תפעולי",
-      statusClassName: "border-gold/20 bg-gold/10 text-gold-soft",
-      insight,
-    };
-  }
-
-  if (roiMultiplier !== null && roiMultiplier >= 2) {
-    return {
-      conversionRate,
-      costPerLead,
-      costPerSale,
-      estimatedRevenue,
-      netProfit,
-      paybackDays,
-      roiMultiplier,
-      roiPercentage,
-      status: "רווחי",
-      statusClassName: "border-success/30 bg-success/15 text-green-100",
-      insight,
-    };
-  }
-
-  if (roiMultiplier !== null && roiMultiplier >= 1) {
-    return {
-      conversionRate,
-      costPerLead,
-      costPerSale,
-      estimatedRevenue,
-      netProfit,
-      paybackDays,
-      roiMultiplier,
-      roiPercentage,
-      status: "גבולי",
-      statusClassName: "border-gold/20 bg-gold/10 text-yellow-100",
-      insight,
-    };
-  }
-
-  if (roiMultiplier === null) {
-    return {
-      conversionRate,
-      costPerLead,
-      costPerSale,
-      estimatedRevenue,
-      netProfit,
-      paybackDays,
-      roiMultiplier,
-      roiPercentage,
-      status: "-",
-      statusClassName: "border-white/10 bg-white/[0.04] text-zinc-300",
-      insight,
-    };
-  }
+  const paybackLabel = getPaybackLabel(monthlyCost, estimatedRevenue, netProfit, paybackDays);
+  const recommendation = getRecommendation(monthlyCost, estimatedRevenue, roiPercentage, conversionRate, leadsCount, salesCount);
+  const status = getStatus(roiPercentage);
 
   return {
     conversionRate,
@@ -205,12 +203,12 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
     costPerSale,
     estimatedRevenue,
     netProfit,
+    paybackLabel,
     paybackDays,
-    roiMultiplier,
     roiPercentage,
-    status: "מפסיד",
-    statusClassName: "border-danger/30 bg-danger/15 text-red-100",
-    insight,
+    recommendation,
+    status: status.status,
+    statusClassName: status.statusClassName,
   };
 }
 
@@ -311,11 +309,14 @@ export function RoiCenter() {
   const totalNetProfit = totalRevenue - totalCost;
   const overallRoiPercentage = totalCost > 0 ? (totalNetProfit / totalCost) * 100 : null;
   const bestTool = sortedTools[0] ?? null;
-  const losingTools = tools.filter((tool) => getMetrics(tool).status === "מפסיד");
+  const losingTools = tools.filter((tool) => {
+    const metrics = getMetrics(tool);
+    return metrics.roiPercentage !== null && metrics.roiPercentage < -10;
+  });
   const weakestTool = [...losingTools].sort((a, b) => {
     const aMetrics = getMetrics(a);
     const bMetrics = getMetrics(b);
-    return aMetrics.netProfit - bMetrics.netProfit || (aMetrics.roiMultiplier ?? 0) - (bMetrics.roiMultiplier ?? 0);
+    return aMetrics.netProfit - bMetrics.netProfit || (aMetrics.roiPercentage ?? 0) - (bMetrics.roiPercentage ?? 0);
   })[0] ?? null;
   const maxComparisonValue = Math.max(
     1,
@@ -433,11 +434,11 @@ export function RoiCenter() {
   const summaryCards = [
     { label: "סך השקעה חודשית", value: formatMoney(totalCost), tone: "card-default" },
     { label: "סך החזר משוער", value: formatMoney(totalRevenue), tone: "card-money" },
-    { label: "רווח נקי משוער", value: formatMoney(totalNetProfit), tone: totalNetProfit >= 0 ? "card-success" : "card-danger" },
+    { label: "רווח חודשי משוער", value: formatMoney(totalNetProfit), tone: totalNetProfit >= 0 ? "card-success" : "card-danger" },
     { label: "ROI כללי", value: formatPercent(overallRoiPercentage), tone: "card-default" },
     {
       label: "הכלי הכי רווחי",
-      meta: bestTool ? `רווח נקי: ${formatMoney(getMetrics(bestTool).netProfit)}` : "",
+      meta: bestTool ? `רווח חודשי משוער: ${formatMoney(getMetrics(bestTool).netProfit)}` : "",
       value: bestTool ? bestTool.name : "-",
       tone: "card-money",
     },
@@ -564,7 +565,7 @@ export function RoiCenter() {
                 <p className="text-xs font-black uppercase tracking-[0.22em] text-gold-soft">Tools</p>
                 <h2 className="mt-2 text-2xl font-black text-white">כלים והשקעות</h2>
               </div>
-              <p className="text-sm text-zinc-500">ממויין לפי רווח נקי מהגבוה לנמוך</p>
+              <p className="text-sm text-zinc-500">ממויין לפי רווח חודשי משוער מהגבוה לנמוך</p>
             </div>
 
             {loading ? (
@@ -593,24 +594,27 @@ export function RoiCenter() {
                       <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <Metric label="עלות חודשית" value={formatMoney(tool.monthly_cost)} />
                         <Metric label="החזר משוער" value={formatMoney(metrics.estimatedRevenue)} />
-                        <Metric label="רווח נקי" value={formatMoney(metrics.netProfit)} />
-                        <Metric label="ROI" value={formatPercent(metrics.roiPercentage)} />
+                        <Metric label="רווח חודשי משוער" value={formatMoney(metrics.netProfit)} />
+                        <Metric className={metrics.statusClassName} label="ROI" value={formatPercent(metrics.roiPercentage)} />
                         <Metric label="עלות לתוצאה" value={formatOptionalMoney(metrics.costPerLead)} />
                         <Metric label="עלות להמרה / מכירה" value={formatOptionalMoney(metrics.costPerSale)} />
-                        <Metric label="אחוז המרה" value={formatPercent(metrics.conversionRate)} />
+                        <Metric label="אחוז המרה" value={formatConversionRate(metrics.conversionRate)} />
                         <Metric label="המרות / תוצאות" value={`${tool.sales_count} / ${tool.leads_count}`} />
-                        <Metric label="החזר השקעה ממוצע" value={formatDays(metrics.paybackDays)} />
+                        <Metric label="זמן החזר השקעה" value={metrics.paybackLabel} />
                       </div>
 
-                      <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-zinc-300">{metrics.insight}</p>
+                      <div className="mt-4 rounded-xl border border-gold/15 bg-gold/[0.06] p-3">
+                        <p className="text-xs font-black text-gold-soft">המלצת מערכת</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-300">{metrics.recommendation}</p>
+                      </div>
 
                       {tool.notes ? <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-zinc-400">{tool.notes}</p> : null}
 
                       <div className="mt-4 flex flex-col gap-2 sm:flex-row">
-                        <button className="button-secondary flex-1" onClick={() => startEdit(tool)} type="button">
+                        <button className="button-primary flex-1" onClick={() => startEdit(tool)} type="button">
                           עריכה
                         </button>
-                        <button className="button-danger flex-1" disabled={pendingActionId === tool.id} onClick={() => deleteTool(tool)} type="button">
+                        <button className="button-secondary flex-1 border-danger/30 text-red-100 hover:border-danger/45 hover:bg-danger/10 hover:shadow-[0_0_24px_rgba(229,72,77,0.12)]" disabled={pendingActionId === tool.id} onClick={() => deleteTool(tool)} type="button">
                           מחיקה
                         </button>
                       </div>
@@ -637,7 +641,7 @@ export function RoiCenter() {
                     <div className="rounded-2xl border border-white/[0.08] bg-black/20 p-4" key={tool.id}>
                       <div className="flex items-center justify-between gap-3">
                         <p className="font-bold text-white">{tool.name}</p>
-                        <p className="text-xs text-zinc-500">{formatMoney(metrics.netProfit)} נטו</p>
+                        <p className="text-xs text-zinc-500">רווח חודשי משוער: {formatMoney(metrics.netProfit)}</p>
                       </div>
                       <ComparisonBar label="עלות" value={formatMoney(tool.monthly_cost)} width={costWidth} tone="bg-danger/70" />
                       <ComparisonBar label="החזר" value={formatMoney(metrics.estimatedRevenue)} width={revenueWidth} tone="bg-gradient-to-l from-gold to-gold-soft" />
@@ -653,9 +657,9 @@ export function RoiCenter() {
   );
 }
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ className = "", label, value }: { className?: string; label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-3">
+    <div className={`rounded-xl border border-white/[0.06] bg-white/[0.025] p-3 ${className}`}>
       <p className="text-[11px] font-bold text-zinc-500">{label}</p>
       <p className="mt-1 break-words text-base font-black text-white">{value}</p>
     </div>
