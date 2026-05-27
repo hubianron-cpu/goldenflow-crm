@@ -44,8 +44,14 @@ function getTomorrowIso() {
 }
 
 function getWhatsappUrl(phone: string | null) {
-  const cleanPhone = phone?.replace(/[^\d+]/g, "");
-  return cleanPhone ? `https://wa.me/${cleanPhone.replace(/^\+/, "")}` : "#";
+  const cleanPhone = phone?.replace(/[^\d]/g, "");
+
+  if (!cleanPhone) {
+    return "#";
+  }
+
+  const normalizedPhone = cleanPhone.startsWith("0") ? `972${cleanPhone.slice(1)}` : cleanPhone;
+  return `https://wa.me/${normalizedPhone}`;
 }
 
 function getApiErrorMessage(payload: Record<string, unknown>, fallback: string) {
@@ -72,17 +78,22 @@ export function PipelineBoard() {
   const [loading, setLoading] = useState(true);
 
   const loadLeads = useCallback(async () => {
-    const response = await fetch("/api/leads", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
+    try {
+      const response = await fetch("/api/leads", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setError(payload.error || "לא הצלחנו לטעון את מסלול המכירה.");
+      if (!response.ok) {
+        setError(payload.error || "לא הצלחנו לטעון את מסלול המכירה.");
+        setLeads([]);
+        return;
+      }
+
+      setLeads(payload.leads ?? []);
+      setError("");
+    } catch {
+      setError("לא הצלחנו לטעון את מסלול המכירה. בדקו את החיבור ונסו שוב.");
       setLeads([]);
-      return;
     }
-
-    setLeads(payload.leads ?? []);
-    setError("");
   }, []);
 
   useEffect(() => {
@@ -90,9 +101,13 @@ export function PipelineBoard() {
 
     async function boot() {
       setLoading(true);
-      await loadLeads();
+      try {
+        await loadLeads();
+      } finally {
+        if (!active) {
+          return;
+        }
 
-      if (active) {
         setLoading(false);
       }
     }
@@ -189,6 +204,14 @@ export function PipelineBoard() {
 
   function handleDrop(status: LeadStatus) {
     if (!draggedLeadId) {
+      return;
+    }
+
+    const draggedLead = leads.find((lead) => lead.id === draggedLeadId);
+
+    if (draggedLead && normalizeLeadStatus(draggedLead.status) === status) {
+      setDraggedLeadId(null);
+      setDragOverStatus(null);
       return;
     }
 
@@ -347,6 +370,28 @@ export function PipelineBoard() {
                           <p>סיכוי סגירה: {lead.deal_probability}%</p>
                           <p>פעולה הבאה: {formatShortDate(lead.next_action_date)}</p>
                           {lead.notes ? <p className="line-clamp-2">הערות: {lead.notes}</p> : null}
+                          <label className="grid gap-1 text-xs font-semibold text-zinc-300">
+                            שינוי שלב
+                            <select
+                              className="field min-h-10 py-2 text-xs"
+                              onChange={(event) => {
+                                event.stopPropagation();
+                                const nextStatus = event.target.value as LeadStatus;
+
+                                if (normalizeLeadStatus(lead.status) !== nextStatus) {
+                                  updateStage(lead.id, nextStatus);
+                                }
+                              }}
+                              onClick={(event) => event.stopPropagation()}
+                              value={normalizeLeadStatus(lead.status)}
+                            >
+                              {LEAD_STATUSES.map((status) => (
+                                <option key={status.value} value={status.value}>
+                                  {status.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
                           <div className="grid grid-cols-2 gap-2 pt-1">
                             <button
                               className="button-secondary min-h-9 px-2 py-1.5 text-xs"
@@ -373,7 +418,7 @@ export function PipelineBoard() {
                               ✔ טיפלתי
                             </button>
                           </div>
-                          <p className="text-[10px] text-zinc-600 md:hidden">החלקה ימינה = טיפלתי · שמאלה = דחייה</p>
+                          <p className="text-[10px] text-zinc-600 md:hidden">במובייל: החלקה ימינה מסמנת טיפלתי, החלקה שמאלה דוחה למחר</p>
                         </div>
                       </article>
                     );
