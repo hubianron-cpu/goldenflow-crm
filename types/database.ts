@@ -189,6 +189,7 @@ export type Database = {
           monthly_cost: number;
           name: string;
           notes: string;
+          result_type: string;
           sales_count: number;
           user_id: string;
         };
@@ -201,6 +202,7 @@ export type Database = {
           monthly_cost?: number;
           name: string;
           notes?: string;
+          result_type?: string;
           sales_count?: number;
           user_id: string;
         };
@@ -213,6 +215,7 @@ export type Database = {
           monthly_cost?: number;
           name?: string;
           notes?: string;
+          result_type?: string;
           sales_count?: number;
           user_id?: string;
         };

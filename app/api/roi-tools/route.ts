@@ -12,6 +12,7 @@ type RoiToolPayload = {
   monthly_cost: number;
   name: string;
   notes: string;
+  result_type: string;
   sales_count: number;
 };
 type ValidatedToolPayload =
@@ -22,7 +23,7 @@ type ValidatedToolPayload =
     };
 
 const roiToolSelect =
-  "id, user_id, name, category, monthly_cost, leads_count, sales_count, average_sale_value, notes, created_at";
+  "id, user_id, name, category, monthly_cost, leads_count, sales_count, average_sale_value, result_type, notes, created_at";
 
 function jsonError(message: string, status: number, meta?: Record<string, unknown>) {
   return NextResponse.json({ error: message, ...meta }, { status });
@@ -95,13 +96,14 @@ function validateToolPayload(record: Record<string, unknown>): ValidatedToolPayl
   const name = typeof record.name === "string" ? record.name.trim() : "";
   const category = typeof record.category === "string" ? record.category.trim() : "";
   const notes = typeof record.notes === "string" ? record.notes.trim() : "";
+  const resultType = typeof record.result_type === "string" ? record.result_type.trim() : "לידים";
   const monthlyCost = parseSafeNumber(record.monthly_cost);
   const leadsCount = parseSafeInteger(record.leads_count);
   const salesCount = parseSafeInteger(record.sales_count);
   const averageSaleValue = parseSafeNumber(record.average_sale_value);
 
   if (!name) {
-    return { error: "שם הכלי הוא שדה חובה." };
+    return { error: "שם ההוצאה / הכלי הוא שדה חובה." };
   }
 
   if (
@@ -118,19 +120,19 @@ function validateToolPayload(record: Record<string, unknown>): ValidatedToolPayl
   }
 
   if (leadsCount < 0) {
-    return { error: "כמות לידים לא יכולה להיות שלילית." };
+    return { error: "כמות תוצאות לא יכולה להיות שלילית." };
   }
 
   if (salesCount < 0) {
-    return { error: "כמות מכירות לא יכולה להיות שלילית." };
+    return { error: "כמות המרות / מכירות לא יכולה להיות שלילית." };
   }
 
   if (averageSaleValue < 0) {
-    return { error: "שווי מכירה ממוצעת לא יכול להיות שלילי." };
+    return { error: "שווי תוצאה ממוצעת לא יכול להיות שלילי." };
   }
 
   if (leadsCount > 0 && salesCount > leadsCount) {
-    return { error: "כמות מכירות לא יכולה להיות גבוהה מכמות הלידים." };
+    return { error: "כמות המרות / מכירות לא יכולה להיות גבוהה מכמות התוצאות." };
   }
 
   return {
@@ -141,6 +143,7 @@ function validateToolPayload(record: Record<string, unknown>): ValidatedToolPayl
       monthly_cost: monthlyCost,
       name,
       notes,
+      result_type: resultType || "לידים",
       sales_count: salesCount,
     },
   };
