@@ -28,11 +28,20 @@ export type ShiftRequirement = {
   requiredGuards: number;
 };
 
+export type ScheduleWarning = {
+  type: string;
+  day?: string;
+  shiftName?: string;
+  message: string;
+};
+
 export type ParsedScheduleInput = {
   employees: Employee[];
   availability: AvailabilityEntry[];
   shiftRequirements: ShiftRequirement[];
+  blockingErrors: string[];
   warnings: string[];
+  warningDetails: ScheduleWarning[];
 };
 
 export type ShiftAssignment = {
@@ -58,6 +67,7 @@ export type GeneratedSchedule = {
   shifts: ShiftAssignment[];
   employeeSummaries: EmployeeSummary[];
   warnings: string[];
+  warningDetails: ScheduleWarning[];
 };
 
 export const ROLE_LABELS: Record<EmployeeRole, string> = {

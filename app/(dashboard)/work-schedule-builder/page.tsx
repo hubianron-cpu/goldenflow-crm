@@ -34,8 +34,9 @@ export default function WorkScheduleBuilderPage() {
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState("");
 
+  const blockingErrors = input?.blockingErrors ?? [];
   const allWarnings = useMemo(() => {
-    return [...(input?.warnings ?? []), ...(schedule?.warnings ?? [])];
+    return schedule?.warnings ?? input?.warnings ?? [];
   }, [input?.warnings, schedule?.warnings]);
 
   async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
@@ -65,7 +66,17 @@ export default function WorkScheduleBuilderPage() {
     }
 
     setError("");
-    setSchedule(generateWorkSchedule(input.employees, input.availability, input.shiftRequirements));
+    if (input.blockingErrors.length > 0) {
+      setError("יש לתקן את שגיאות הקובץ לפני יצירת סידור עבודה.");
+      return;
+    }
+
+    const generated = generateWorkSchedule(input.employees, input.availability, input.shiftRequirements);
+    setSchedule({
+      ...generated,
+      warnings: [...input.warnings, ...generated.warnings],
+      warningDetails: [...input.warningDetails, ...generated.warningDetails],
+    });
   }
 
   return (
@@ -83,16 +94,16 @@ export default function WorkScheduleBuilderPage() {
           <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
             <label className="button-secondary cursor-pointer gap-2">
               <Upload className="h-4 w-4" />
-              העלאת Excel
+              העלאת קובץ אקסל
               <input accept=".xlsx,.xls" className="hidden" onChange={handleFileUpload} type="file" />
             </label>
-            <button className="button-primary gap-2" disabled={!input || isParsing} onClick={handleGenerateSchedule} type="button">
+            <button className="button-primary gap-2" disabled={!input || isParsing || blockingErrors.length > 0} onClick={handleGenerateSchedule} type="button">
               <WandSparkles className="h-4 w-4" />
-              יצירת סידור
+              צור סידור עבודה
             </button>
             <button className="button-secondary gap-2" disabled={!schedule} onClick={() => schedule && exportScheduleToExcel(schedule)} type="button">
               <Download className="h-4 w-4" />
-              יצוא Excel
+              ייצוא לאקסל
             </button>
           </div>
         </div>
@@ -114,6 +125,16 @@ export default function WorkScheduleBuilderPage() {
 
         {isParsing ? <p className="mt-4 text-sm text-gold-soft">קורא את הקובץ...</p> : null}
         {error ? <p className="mt-4 rounded-2xl border border-danger/25 bg-danger/10 p-4 text-sm text-red-100">{error}</p> : null}
+        {blockingErrors.length ? (
+          <div className="mt-4 space-y-2 rounded-2xl border border-danger/30 bg-danger/10 p-4">
+            <p className="text-sm font-bold text-red-100">שגיאות שחוסמות יצירת סידור</p>
+            {blockingErrors.map((blockingError) => (
+              <p className="text-sm leading-6 text-red-100" key={blockingError}>
+                {blockingError}
+              </p>
+            ))}
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-6 xl:grid-cols-2">
@@ -150,7 +171,7 @@ export default function WorkScheduleBuilderPage() {
         </div>
 
         <div className="panel p-5">
-          <h2 className="text-xl font-black text-white">תצוגת דרישות משמרת</h2>
+          <h2 className="text-xl font-black text-white">דרישות משמרות</h2>
           <div className="mt-4">
             {input?.shiftRequirements.length ? (
               <TableShell>
@@ -310,7 +331,7 @@ export default function WorkScheduleBuilderPage() {
         <div className="panel p-5">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-red-200" />
-            <h2 className="text-xl font-black text-white">אזהרות</h2>
+            <h2 className="text-xl font-black text-white">התראות</h2>
           </div>
           <div className="mt-4 space-y-3">
             {allWarnings.length ? (

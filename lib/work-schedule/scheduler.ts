@@ -5,6 +5,7 @@ import {
   type EmployeeRole,
   type EmployeeSummary,
   type GeneratedSchedule,
+  type ScheduleWarning,
   type ShiftAssignment,
   type ShiftKey,
   type ShiftRequirement,
@@ -22,6 +23,7 @@ type AssignmentState = {
   workedNightBeforeDay: Map<string, Set<string>>;
   summaryWarnings: Map<string, Set<string>>;
   globalWarnings: Set<string>;
+  warningDetails: Map<string, ScheduleWarning>;
 };
 
 type Candidate = {
@@ -31,6 +33,12 @@ type Candidate = {
 
 function keyFor(employeeName: string, day: string, shiftKey: ShiftKey) {
   return `${employeeName.trim()}|${day.trim()}|${shiftKey}`;
+}
+
+function addStateWarning(state: AssignmentState, warning: ScheduleWarning) {
+  const key = `${warning.type}|${warning.day ?? ""}|${warning.shiftName ?? ""}|${warning.message}`;
+  state.globalWarnings.add(warning.message);
+  state.warningDetails.set(key, warning);
 }
 
 function getDayIndexes(requirements: ShiftRequirement[]) {
@@ -94,30 +102,56 @@ function buildCandidates(
 
     const availabilityEntry = availability.get(keyFor(employee.employeeName, requirement.day, requirement.shiftKey));
     if (!availabilityEntry) {
+      addStateWarning(state, {
+        type: "missing_availability_treated_unavailable",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message: `חסרה זמינות עבור ${employee.employeeName} ביום ${requirement.day}, משמרת ${requirement.shiftName}; ההתייחסות היא כאדום.`,
+      });
       continue;
     }
 
     if (availabilityEntry.availability === "red") {
+      addStateWarning(state, {
+        type: "red_availability_blocked",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message: `${employee.employeeName} לא שובץ/ה ביום ${requirement.day}, משמרת ${requirement.shiftName}, כי הזמינות אדומה.`,
+      });
       continue;
     }
 
     if (!availabilityEntry.availability) {
-      state.globalWarnings.add(
-        `ערך זמינות לא תקין עבור ${employee.employeeName} ביום ${requirement.day}, משמרת ${requirement.shiftName}`,
-      );
+      addStateWarning(state, {
+        type: "unknown_availability_treated_unavailable",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message: `ערך זמינות לא תקין עבור ${employee.employeeName} ביום ${requirement.day}, משמרת ${requirement.shiftName}; ההתייחסות היא כאדום.`,
+      });
       continue;
     }
 
     const assignedCount = state.assignedCount.get(employee.employeeName) ?? 0;
     if (assignedCount >= employee.maxShiftsPerWeek) {
       const message = `${employee.employeeName} הגיע/ה למקסימום השבועי (${employee.maxShiftsPerWeek})`;
-      state.globalWarnings.add(message);
+      addStateWarning(state, {
+        type: "employee_reached_max_shifts",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message,
+      });
       state.summaryWarnings.get(employee.employeeName)?.add("הגיע/ה למקסימום המשמרות השבועי");
       continue;
     }
 
     const conflict = hasConflict(employee.employeeName, requirement, state, dayIndexes);
     if (conflict) {
+      addStateWarning(state, {
+        type: conflict.includes("אותו יום") ? "same_day_conflict_prevented" : "night_to_next_morning_conflict_prevented",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message: `${employee.employeeName} לא שובץ/ה ביום ${requirement.day}, משמרת ${requirement.shiftName}: ${conflict}.`,
+      });
       state.summaryWarnings.get(employee.employeeName)?.add(conflict);
       continue;
     }
@@ -149,6 +183,18 @@ function sortCandidates(candidates: Candidate[], requirement: ShiftRequirement, 
       if (aNights !== bNights) {
         return aNights - bNights;
       }
+    }
+
+    const aYellow = state.yellowCount.get(a.employee.employeeName) ?? 0;
+    const bYellow = state.yellowCount.get(b.employee.employeeName) ?? 0;
+    if (aYellow !== bYellow) {
+      return aYellow - bYellow;
+    }
+
+    const aWarnings = state.summaryWarnings.get(a.employee.employeeName)?.size ?? 0;
+    const bWarnings = state.summaryWarnings.get(b.employee.employeeName)?.size ?? 0;
+    if (aWarnings !== bWarnings) {
+      return aWarnings - bWarnings;
     }
 
     return a.employee.employeeName.localeCompare(b.employee.employeeName, "he");
@@ -214,14 +260,24 @@ function fillSlots({
       const roleLabel = ROLE_LABELS[role];
       const message = `חסר ${roleLabel} במשמרת ${assignment.requirement.shiftName} ביום ${assignment.requirement.day}. השיבוץ נשאר ריק כדי לא לשבור כלל.`;
       assignment.warnings.push(message);
-      state.globalWarnings.add(message);
+      addStateWarning(state, {
+        type: role === "shift_leader" ? "missing_shift_leader" : "missing_guard",
+        day: assignment.requirement.day,
+        shiftName: assignment.requirement.shiftName,
+        message,
+      });
       continue;
     }
 
     if (greenCandidates.length === 0 && yellowCandidates.length > 0) {
-      const message = `לא היו מספיק עובדים ירוקים עבור ${assignment.requirement.shiftName} ביום ${assignment.requirement.day}; נעשה שימוש בצהוב.`;
+      const message = "שובץ עובד בזמינות צהובה כי לא היו מספיק עובדים זמינים בירוק.";
       assignment.warnings.push(message);
-      state.globalWarnings.add(message);
+      addStateWarning(state, {
+        type: "yellow_availability_used",
+        day: assignment.requirement.day,
+        shiftName: assignment.requirement.shiftName,
+        message,
+      });
     }
 
     assignEmployee(chosen.employee.employeeName, assignment.requirement, chosen.availability, state);
@@ -230,7 +286,12 @@ function fillSlots({
     if (chosen.availability === "yellow") {
       const message = `${chosen.employee.employeeName} שובץ/ה על זמינות צהובה ביום ${assignment.requirement.day}, משמרת ${assignment.requirement.shiftName}`;
       assignment.warnings.push(message);
-      state.globalWarnings.add(message);
+      addStateWarning(state, {
+        type: "yellow_availability_used",
+        day: assignment.requirement.day,
+        shiftName: assignment.requirement.shiftName,
+        message,
+      });
       state.summaryWarnings.get(chosen.employee.employeeName)?.add("שובץ/ה במשמרת צהובה");
     }
   }
@@ -244,15 +305,37 @@ export function generateWorkSchedule(
   shiftRequirements: ShiftRequirement[],
 ): GeneratedSchedule {
   const warnings = new Set<string>();
-  const activeEmployees = employees.filter((employee) => employee.activeForScheduling);
-  const validEmployees = activeEmployees.filter((employee) => {
-    if (employee.role !== "shift_leader" && employee.role !== "guard") {
-      warnings.add(`לעובד ${employee.employeeName} חסר תפקיד תקין`);
+  const warningDetails = new Map<string, ScheduleWarning>();
+  const addLocalWarning = (warning: ScheduleWarning) => {
+    const key = `${warning.type}|${warning.day ?? ""}|${warning.shiftName ?? ""}|${warning.message}`;
+    warnings.add(warning.message);
+    warningDetails.set(key, warning);
+  };
+  const activeEmployees = employees.filter((employee) => {
+    if (!employee.activeForScheduling) {
+      addLocalWarning({
+        type: "inactive_employee_skipped",
+        message: `${employee.employeeName} לא פעיל/ה לשיבוץ ולכן לא שובץ/ה.`,
+      });
       return false;
     }
 
-    if (!Number.isFinite(employee.maxShiftsPerWeek) || employee.maxShiftsPerWeek < 0) {
-      warnings.add(`לעובד ${employee.employeeName} יש מגבלת משמרות לא תקינה`);
+    return true;
+  });
+  const validEmployees = activeEmployees.filter((employee) => {
+    if (employee.role !== "shift_leader" && employee.role !== "guard") {
+      addLocalWarning({
+        type: "invalid_employee_role_skipped",
+        message: `לעובד ${employee.employeeName} חסר תפקיד תקין ולכן הוא לא ישובץ.`,
+      });
+      return false;
+    }
+
+    if (!Number.isFinite(employee.maxShiftsPerWeek) || employee.maxShiftsPerWeek <= 0) {
+      addLocalWarning({
+        type: "invalid_employee_max_shifts_skipped",
+        message: `לעובד ${employee.employeeName} יש מגבלת משמרות לא תקינה או 0 ולכן הוא לא ישובץ.`,
+      });
       return false;
     }
 
@@ -269,6 +352,7 @@ export function generateWorkSchedule(
     workedNightBeforeDay: new Map(),
     summaryWarnings: new Map(validEmployees.map((employee) => [employee.employeeName, new Set<string>()])),
     globalWarnings: warnings,
+    warningDetails,
   };
 
   const shifts = sortRequirements(shiftRequirements).map((requirement) => {
@@ -284,7 +368,12 @@ export function generateWorkSchedule(
     if (requirement.requiredShiftLeaders < 0 || requirement.requiredGuards < 0) {
       const message = `דרישת משמרת לא תקינה ביום ${requirement.day}, משמרת ${requirement.shiftName}`;
       assignment.warnings.push(message);
-      state.globalWarnings.add(message);
+      addStateWarning(state, {
+        type: "invalid_shift_requirement",
+        day: requirement.day,
+        shiftName: requirement.shiftName,
+        message,
+      });
       return assignment;
     }
 
@@ -313,11 +402,21 @@ export function generateWorkSchedule(
     assignment.missingGuards = Math.max(0, requirement.requiredGuards - assignment.assignedGuards.length);
 
     if (assignment.missingShiftLeaders > 0) {
-      state.globalWarnings.add(`חסר אחמ"ש למשמרת ${SHIFT_LABELS[requirement.shiftKey]} ביום ${requirement.day}`);
+      addStateWarning(state, {
+        type: "missing_shift_leader",
+        day: requirement.day,
+        shiftName: SHIFT_LABELS[requirement.shiftKey],
+        message: `חסר אחמ"ש למשמרת ${SHIFT_LABELS[requirement.shiftKey]} ביום ${requirement.day}`,
+      });
     }
 
     if (assignment.missingGuards > 0) {
-      state.globalWarnings.add(`חסר מאבטח למשמרת ${SHIFT_LABELS[requirement.shiftKey]} ביום ${requirement.day}`);
+      addStateWarning(state, {
+        type: "missing_guard",
+        day: requirement.day,
+        shiftName: SHIFT_LABELS[requirement.shiftKey],
+        message: `חסר מאבטח למשמרת ${SHIFT_LABELS[requirement.shiftKey]} ביום ${requirement.day}`,
+      });
     }
 
     return assignment;
@@ -337,5 +436,6 @@ export function generateWorkSchedule(
     shifts,
     employeeSummaries,
     warnings: Array.from(state.globalWarnings),
+    warningDetails: Array.from(state.warningDetails.values()),
   };
 }
