@@ -20,6 +20,7 @@ import {
   type LeadStatus,
   getLeadScore,
 } from "@/lib/leads";
+import { buildWhatsAppUrl, getWhatsAppMessage, WHATSAPP_MESSAGE_OPTIONS, type WhatsAppMessageType } from "@/lib/whatsapp";
 
 type SortKey = "score_desc" | "inactivity_desc" | "value_desc" | "urgency" | "created_desc" | "created_asc" | "name_asc";
 
@@ -387,6 +388,51 @@ export function LeadManager() {
     });
   }
 
+  function getWhatsAppUrl(lead: Lead, type: WhatsAppMessageType) {
+    return buildWhatsAppUrl(lead.phone, getWhatsAppMessage(type, lead));
+  }
+
+  function showMissingPhoneMessage() {
+    setSuccess("");
+    setError("אין מספר טלפון לליד הזה");
+  }
+
+  function renderWhatsAppCenter(lead: Lead) {
+    return (
+      <details className="group relative">
+        <summary className="button-secondary w-full cursor-pointer list-none py-2 text-center text-sm [&::-webkit-details-marker]:hidden">
+          וואטסאפ
+        </summary>
+        <div className="mt-2 grid gap-2 rounded-xl border border-white/10 bg-black/35 p-2">
+          {WHATSAPP_MESSAGE_OPTIONS.map((option) => {
+            const whatsappUrl = getWhatsAppUrl(lead, option.type);
+
+            return whatsappUrl ? (
+              <a
+                className="button-secondary min-h-10 justify-center px-3 py-2 text-xs"
+                href={whatsappUrl}
+                key={option.type}
+                rel="noopener noreferrer"
+                target="_blank"
+              >
+                {option.label}
+              </a>
+            ) : (
+              <button
+                className="button-secondary min-h-10 justify-center px-3 py-2 text-xs opacity-80"
+                key={option.type}
+                onClick={showMissingPhoneMessage}
+                type="button"
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
+      </details>
+    );
+  }
+
   if (loading) {
     return <LoadingCard label="טוען לידים..." />;
   }
@@ -678,6 +724,9 @@ export function LeadManager() {
                         >
                           מחק ליד
                         </button>
+                        <div className="mb-3">
+                          {renderWhatsAppCenter(lead)}
+                        </div>
                         <form className="space-y-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
                           <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
                           <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
@@ -770,6 +819,9 @@ export function LeadManager() {
                   >
                     מחק ליד
                   </button>
+                  <div className="mt-3">
+                    {renderWhatsAppCenter(lead)}
+                  </div>
 
                   <div className="mt-4 flex flex-wrap gap-2">
                     {LEAD_STATUSES.map((status) => (
