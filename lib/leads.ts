@@ -101,6 +101,19 @@ export function normalizeLeadStatus(status: string): LeadStatus {
   return LEGACY_STATUS_MAP[status] ?? "דורש המשך טיפול";
 }
 
+const RAW_FINAL_STATUS_VALUES = new Set(["closed", "won", "lost", "\u05e1\u05d2\u05d5\u05e8"]);
+
+export function isFinalLeadStatus(status: string | null | undefined) {
+  const cleanStatus = (status ?? "").trim();
+
+  if (!cleanStatus) {
+    return false;
+  }
+
+  const normalized = normalizeLeadStatus(cleanStatus);
+  return normalized === LEAD_STATUSES[6].value || normalized === LEAD_STATUSES[7].value || RAW_FINAL_STATUS_VALUES.has(cleanStatus.toLowerCase());
+}
+
 export function isNextActionType(value: string): value is NextActionType {
   return NEXT_ACTION_TYPES.some((item) => item.value === value);
 }
@@ -144,7 +157,7 @@ export function hasMissedNextAction(lead: Pick<Lead, "next_action_date">) {
 export function isRescueLead(lead: Lead) {
   const status = normalizeLeadStatus(lead.status);
 
-  if (status === "נסגר בהצלחה" || isNotRelevantLead(lead)) {
+  if (isFinalLeadStatus(lead.status) || isNotRelevantLead(lead)) {
     return false;
   }
 
@@ -193,6 +206,10 @@ export function getActionCompletedStatus(status: string): LeadStatus | null {
   const closedStatus = LEAD_STATUSES[6].value;
   const irrelevantStatus = LEAD_STATUSES[7].value;
   const currentStatus = normalizeLeadStatus(status);
+
+  if (isFinalLeadStatus(status)) {
+    return null;
+  }
 
   if (currentStatus === leadNewStatus) {
     return contactStatus;
@@ -251,7 +268,7 @@ export function isNotRelevantLead(lead: Pick<Lead, "reason_not_closed" | "status
 export function shouldMoveToReactivation(lead: Lead) {
   const status = normalizeLeadStatus(lead.status);
 
-  if (status === "ממתין לתגובה" || status === "הצעה נשלחה" || status === "נסגר בהצלחה" || isNotRelevantLead(lead)) {
+  if (status === "ממתין לתגובה" || status === "הצעה נשלחה" || isFinalLeadStatus(lead.status) || isNotRelevantLead(lead)) {
     return false;
   }
 

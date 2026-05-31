@@ -23,6 +23,7 @@ import {
   getReactivationScore,
   getRescueActionLabel,
   getRescueActivityLabel,
+  isFinalLeadStatus,
   isRescueLead,
   LEAD_STATUSES,
   normalizeLeadStatus,
@@ -367,9 +368,9 @@ export function DashboardMetrics() {
   const metrics = useMemo(() => {
     const total = leads.length;
     const totalValue = leads.reduce((sum, lead) => sum + (lead.value || 0), 0);
-    const active = leads.filter((lead) => !["נסגר בהצלחה", "לא רלוונטי"].includes(normalizeLeadStatus(lead.status))).length;
+    const active = leads.filter((lead) => !isFinalLeadStatus(lead.status)).length;
     const moneyAtRisk = leads
-      .filter((lead) => (lead.value || 0) > 0 && getDaysSinceActivity(lead) > 3)
+      .filter((lead) => !isFinalLeadStatus(lead.status) && (lead.value || 0) > 0 && getDaysSinceActivity(lead) > 3)
       .reduce((sum, lead) => sum + (lead.value || 0), 0);
     const closableRevenue = leads
       .filter((lead) => CLOSABLE_STAGES.includes(normalizeLeadStatus(lead.status)))
@@ -415,14 +416,14 @@ export function DashboardMetrics() {
           lead.next_action_date &&
           new Date(lead.next_action_date).setHours(0, 0, 0, 0) <= new Date().setHours(0, 0, 0, 0);
 
-        return normalizeLeadStatus(lead.status) !== CLOSED_STAGE && (dueToday || getDaysSinceActivity(lead) >= 2 || !lead.last_contact_date);
+        return !isFinalLeadStatus(lead.status) && (dueToday || getDaysSinceActivity(lead) >= 2 || !lead.last_contact_date);
       })
       .sort((a, b) => getLeadScore(b) - getLeadScore(a) || (b.value || 0) - (a.value || 0))
       .slice(0, 6);
     const stuckLeads = leads
-      .filter((lead) => normalizeLeadStatus(lead.status) !== CLOSED_STAGE && getDaysSinceActivity(lead) >= STUCK_AFTER_DAYS)
+      .filter((lead) => !isFinalLeadStatus(lead.status) && getDaysSinceActivity(lead) >= STUCK_AFTER_DAYS)
       .sort((a, b) => getHoursSinceActivity(b) - getHoursSinceActivity(a));
-    const reactivationLeads = leads.filter(isRescueLead).sort(sortRescueLeads);
+    const reactivationLeads = leads.filter((lead) => !isFinalLeadStatus(lead.status) && isRescueLead(lead)).sort(sortRescueLeads);
     const recoverableMoney = reactivationLeads.reduce((sum, lead) => sum + (lead.value || 0), 0);
     const closeableLeads = leads
       .filter((lead) => CLOSABLE_STAGES.includes(normalizeLeadStatus(lead.status)))
@@ -432,19 +433,19 @@ export function DashboardMetrics() {
       getDailyPriorityScore(b) - getDailyPriorityScore(a) || (b.value || 0) - (a.value || 0);
     const dailyClosing = {
       actionToday: leads
-        .filter((lead) => ["לידים חדשים", "יצירת קשר"].includes(normalizeLeadStatus(lead.status)))
+        .filter((lead) => !isFinalLeadStatus(lead.status) && ["לידים חדשים", "יצירת קשר"].includes(normalizeLeadStatus(lead.status)))
         .sort(byDailyPriority)
         .slice(0, 4),
       scheduleCall: leads
-        .filter((lead) => normalizeLeadStatus(lead.status) === "בתהליך שיחה")
+        .filter((lead) => !isFinalLeadStatus(lead.status) && normalizeLeadStatus(lead.status) === "בתהליך שיחה")
         .sort(byDailyPriority)
         .slice(0, 4),
       close: leads
-        .filter((lead) => ["הצעה נשלחה", "ממתין לתגובה"].includes(normalizeLeadStatus(lead.status)))
+        .filter((lead) => !isFinalLeadStatus(lead.status) && ["הצעה נשלחה", "ממתין לתגובה"].includes(normalizeLeadStatus(lead.status)))
         .sort(byDailyPriority)
         .slice(0, 4),
       followUp: leads
-        .filter((lead) => normalizeLeadStatus(lead.status) === "דורש המשך טיפול")
+        .filter((lead) => !isFinalLeadStatus(lead.status) && normalizeLeadStatus(lead.status) === "דורש המשך טיפול")
         .sort(byDailyPriority)
         .slice(0, 4),
     };
@@ -494,7 +495,7 @@ export function DashboardMetrics() {
     return leads
       .filter((lead) => {
         const alreadyHandledClosedLead = normalizeLeadStatus(lead.status) === CLOSED_STAGE && !lead.next_action_date && getDaysSinceActivity(lead) === 0;
-        return !handledLeadIds.includes(lead.id) && !alreadyHandledClosedLead;
+        return !handledLeadIds.includes(lead.id) && !isFinalLeadStatus(lead.status) && !alreadyHandledClosedLead;
       })
       .sort(
         (a, b) =>
@@ -511,7 +512,7 @@ export function DashboardMetrics() {
     return [...leads]
       .filter((lead) => {
         const status = normalizeLeadStatus(lead.status);
-        return status !== CLOSED_STAGE && (CLOSABLE_STAGES.includes(status) || status.includes("ממתין") || status.includes("לסגור"));
+        return !isFinalLeadStatus(lead.status) && (CLOSABLE_STAGES.includes(status) || status.includes("ממתין") || status.includes("לסגור"));
       })
       .sort(
         (a, b) =>
