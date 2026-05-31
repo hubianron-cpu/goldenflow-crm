@@ -205,7 +205,7 @@ function isMoreThan24HoursAgo(value: string | null | undefined) {
 function getAutomatedTaskCopy(lead: Lead, ruleType: AutomationRuleType) {
   if (ruleType === "new_lead") {
     return {
-      description: "צור קשר ראשוני עם הליד",
+      description: "ליצור קשר",
       priority: "גבוהה",
       title: "ליצור קשר",
     };
@@ -228,7 +228,7 @@ async function hasAutomationLog(supabase: LeadWriteClient, leadId: string, ruleT
 
   if (error) {
     logSupabaseError(`task_automation.${ruleType}.log_select`, error);
-    return true;
+    return false;
   }
 
   return Boolean(data);
@@ -301,16 +301,7 @@ async function createAutomatedTask(
   logSupabaseError(`task_automation.${ruleType}.log_insert`, logError);
   console.error("AUTO_TASK_LOG_FAILED", getSupabaseErrorMeta(logError));
 
-  if (task?.id) {
-    const { error: cleanupError } = await supabase.from("tasks").delete().eq("id", task.id).eq("user_id", ownerId);
-
-    if (cleanupError) {
-      logSupabaseError(`task_automation.${ruleType}.task_cleanup`, cleanupError);
-      console.error("AUTO_TASK_CLEANUP_FAILED", getSupabaseErrorMeta(cleanupError));
-    }
-  }
-
-  return { error: getSupabaseErrorMessage(logError) };
+  return { created: true, task };
 }
 
 async function runTaskAutomations(
