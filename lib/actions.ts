@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { hasSupabaseEnv } from "@/lib/env";
+import { requireSubscriptionAccess, SUBSCRIPTION_REQUIRED_MESSAGE } from "@/lib/subscription-guard";
 import { createServerClient } from "@/lib/supabase/server";
 import { normalizeTaskPriority, normalizeTaskStatus } from "@/lib/tasks";
 
@@ -157,6 +158,12 @@ export async function signOut() {
 
 export async function getUsers() {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { data: [], error: SUBSCRIPTION_REQUIRED_MESSAGE };
+  }
+
   const { data, error } = await supabase.from("users").select("id, first_name").order("first_name", { ascending: true });
 
   if (error) {
@@ -209,6 +216,12 @@ export async function createTask(formData: FormData) {
 
 export async function createCrmTask(payload: TaskPayload) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
   const normalized = sanitizeTaskPayload(payload);
 
   if ("error" in normalized) {
@@ -243,6 +256,12 @@ export async function createCrmTask(payload: TaskPayload) {
 
 export async function updateTask(taskId: string, payload: TaskPayload) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
   const normalized = sanitizeTaskPayload(payload);
 
   if (!taskId) {
@@ -286,6 +305,12 @@ export async function toggleTask(taskId: string, complete: boolean) {
 
 export async function completeTask(taskId: string) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
   const now = new Date().toISOString();
 
   if (!taskId) {
@@ -311,6 +336,11 @@ export async function completeTask(taskId: string) {
 
 export async function reopenTask(taskId: string) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
 
   if (!taskId) {
     return { error: "מזהה משימה חסר" };
@@ -335,6 +365,12 @@ export async function reopenTask(taskId: string) {
 
 export async function postponeTask(taskId: string) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
 
@@ -369,6 +405,12 @@ export async function deleteTask(taskId: string) {
 
 export async function softDeleteTask(taskId: string) {
   const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
   const now = new Date().toISOString();
 
   if (!taskId) {

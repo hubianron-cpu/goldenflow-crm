@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/env";
+import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { createServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
@@ -73,6 +74,12 @@ async function getContext() {
 
   if (!user) {
     return { error: jsonError("יש להתחבר כדי לגשת למרכז ROI.", 401) };
+  }
+
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: jsonError(subscription.error, subscription.status) };
   }
 
   return { supabase, user };

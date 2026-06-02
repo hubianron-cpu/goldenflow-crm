@@ -33,6 +33,47 @@ export type Database = {
         };
         Relationships: [];
       };
+      user_subscriptions: {
+        Row: {
+          created_at: string;
+          plan_name: string | null;
+          status: "trial" | "active" | "expired" | "cancelled";
+          trial_start_at: string | null;
+          trial_end_at: string | null;
+          upgraded_at: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          plan_name?: string | null;
+          status?: "trial" | "active" | "expired" | "cancelled";
+          trial_start_at?: string | null;
+          trial_end_at?: string | null;
+          upgraded_at?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          plan_name?: string | null;
+          status?: "trial" | "active" | "expired" | "cancelled";
+          trial_start_at?: string | null;
+          trial_end_at?: string | null;
+          upgraded_at?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "user_subscriptions_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       leads: {
         Row: {
           closed_at: string | null;

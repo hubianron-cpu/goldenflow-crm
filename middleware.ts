@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { hasSupabaseEnv } from "@/lib/env";
+import { getSubscriptionAccess } from "@/lib/subscriptions";
 
 function isPublicPath(pathname: string) {
   return (
@@ -27,6 +28,17 @@ function redirectToLogin(request: NextRequest, response: NextResponse) {
   });
 
   return redirectResponse;
+}
+
+function redirectToUpgrade(request: NextRequest) {
+  const url = request.nextUrl.clone();
+  url.pathname = "/upgrade";
+  url.search = "";
+  return NextResponse.redirect(url);
+}
+
+function shouldCheckSubscription(pathname: string) {
+  return !pathname.startsWith("/admin");
 }
 
 export async function middleware(request: NextRequest) {
@@ -71,6 +83,25 @@ export async function middleware(request: NextRequest) {
 
     if (error || !user) {
       return redirectToLogin(request, response);
+    }
+
+    if (shouldCheckSubscription(request.nextUrl.pathname)) {
+      const { data: subscription, error: subscriptionError } = await supabase
+        .from("user_subscriptions")
+        .select("user_id,status,plan_name,trial_start_at,trial_end_at,upgraded_at,created_at,updated_at")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (subscriptionError) {
+        console.error("SUBSCRIPTION_MIDDLEWARE_CHECK_FAILED", {
+          code: subscriptionError.code ?? null,
+          message: subscriptionError.message ?? null,
+        });
+      }
+
+      if (!getSubscriptionAccess(subscription).hasAccess) {
+        return redirectToUpgrade(request);
+      }
     }
   } catch {
     return redirectToLogin(request, response);

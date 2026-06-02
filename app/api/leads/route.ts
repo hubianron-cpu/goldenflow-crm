@@ -12,6 +12,7 @@ import {
   type NextActionType,
   type Priority,
 } from "@/lib/leads";
+import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -84,6 +85,12 @@ async function getContext() {
     return { error: jsonError("אין משתמש מחובר. התחברו מחדש לפני שמירת לידים.", 401) };
   }
 
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: jsonError(subscription.error, subscription.status) };
+  }
+
   return { supabase, user };
 }
 
@@ -98,6 +105,12 @@ async function getOptionalWriteContext() {
   } = await supabase.auth.getUser();
 
   if (user) {
+    const subscription = await requireSubscriptionAccess(user.id);
+
+    if (!subscription.ok) {
+      return { error: jsonError(subscription.error, subscription.status) };
+    }
+
     return { source: "session" as const, supabase, userId: user.id };
   }
 
