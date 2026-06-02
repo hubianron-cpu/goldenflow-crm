@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AlertTriangle, LogIn } from "lucide-react";
 import { StatusMessage } from "@/components/status-message";
 import { hasSupabaseEnv } from "@/lib/env";
@@ -74,6 +75,9 @@ export default async function LoginPage({
 
           <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-center">
             <p className="text-sm text-zinc-300">עדיין אין לך חשבון?</p>
+            <Link href="/register" className="button-secondary mt-3 w-full">
+              פתח חשבון ניסיון ל־14 יום
+            </Link>
             <a href={whatsappHref} className="button-secondary mt-3 w-full" target="_blank" rel="noreferrer">
               פתיחת מנוי למערכת
             </a>
