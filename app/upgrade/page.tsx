@@ -1,6 +1,7 @@
 import { LogOut, MessageCircle } from "lucide-react";
 import { signOut } from "@/lib/actions";
 
+const paymentHref = "https://meshulam.co.il/s/e89b2737-e347-bbf1-34ce-ca6ba2b0fb94";
 const whatsappHref = `https://wa.me/972524780853?text=${encodeURIComponent("היי רון, אני רוצה לשדרג את המנוי שלי ל-GoldenFlow")}`;
 
 const benefits = [
@@ -28,7 +29,11 @@ export default function UpgradePage() {
           ))}
         </div>
 
-        <a className="button-primary mx-auto mt-8 w-full gap-2 sm:w-auto" href={whatsappHref} target="_blank" rel="noreferrer">
+        <a className="button-primary mx-auto mt-8 w-full gap-2 sm:w-auto" href={paymentHref} target="_blank" rel="noopener noreferrer">
+          לרכישת מנוי בצורה מאובטחת
+        </a>
+
+        <a className="button-secondary mx-auto mt-3 w-full gap-2 sm:w-auto" href={whatsappHref} target="_blank" rel="noopener noreferrer">
           <MessageCircle className="h-4 w-4" />
           לשדרוג דרך וואטסאפ
         </a>
