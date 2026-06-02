@@ -2,7 +2,7 @@ import { LogOut, MessageCircle } from "lucide-react";
 import { signOut } from "@/lib/actions";
 
 const paymentHref = "https://meshulam.co.il/s/e89b2737-e347-bbf1-34ce-ca6ba2b0fb94";
-const whatsappHref = `https://wa.me/972524780853?text=${encodeURIComponent("היי רון, אני רוצה לשדרג את המנוי שלי ל-GoldenFlow")}`;
+const whatsappHref = `https://wa.me/972524780853?text=${encodeURIComponent("מעוניין לקבל פרטים נוספים על המנוי")}`;
 
 const benefits = [
   "המשך ניהול לידים ומשימות",
