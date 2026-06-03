@@ -3,6 +3,7 @@ import type { Database } from "@/types/database";
 export type UserSubscription = Database["public"]["Tables"]["user_subscriptions"]["Row"];
 export type SubscriptionStatus = UserSubscription["status"];
 export type SubscriptionAccessStatus = SubscriptionStatus | "missing";
+type SubscriptionAccessInput = Pick<UserSubscription, "status" | "trial_end_at">;
 
 export type SubscriptionAccess = {
   daysRemaining: number;
@@ -26,7 +27,7 @@ function getDateTime(value: string | null | undefined) {
 }
 
 export function getSubscriptionAccess(
-  subscription: UserSubscription | null | undefined,
+  subscription: SubscriptionAccessInput | null | undefined,
   now: Date = new Date(),
 ): SubscriptionAccess {
   if (!subscription) {

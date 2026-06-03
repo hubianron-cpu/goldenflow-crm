@@ -36,8 +36,13 @@ export type Database = {
       user_subscriptions: {
         Row: {
           created_at: string;
+          grow_direct_debit_id: string | null;
+          grow_last_error_message: string | null;
+          grow_last_payment_date: string | null;
+          grow_last_payment_sum: number | null;
+          grow_transaction_code: string | null;
           plan_name: string | null;
-          status: "trial" | "active" | "expired" | "cancelled";
+          status: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at: string | null;
           trial_end_at: string | null;
           upgraded_at: string | null;
@@ -46,8 +51,13 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          grow_direct_debit_id?: string | null;
+          grow_last_error_message?: string | null;
+          grow_last_payment_date?: string | null;
+          grow_last_payment_sum?: number | null;
+          grow_transaction_code?: string | null;
           plan_name?: string | null;
-          status?: "trial" | "active" | "expired" | "cancelled";
+          status?: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at?: string | null;
           trial_end_at?: string | null;
           upgraded_at?: string | null;
@@ -56,8 +66,13 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          grow_direct_debit_id?: string | null;
+          grow_last_error_message?: string | null;
+          grow_last_payment_date?: string | null;
+          grow_last_payment_sum?: number | null;
+          grow_transaction_code?: string | null;
           plan_name?: string | null;
-          status?: "trial" | "active" | "expired" | "cancelled";
+          status?: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at?: string | null;
           trial_end_at?: string | null;
           upgraded_at?: string | null;
@@ -69,6 +84,44 @@ export type Database = {
             foreignKeyName: "user_subscriptions_user_id_fkey";
             columns: ["user_id"];
             isOneToOne: true;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      grow_webhook_events: {
+        Row: {
+          created_at: string;
+          event_type: string;
+          id: string;
+          payload: Json;
+          processed_at: string | null;
+          transaction_code: string | null;
+          user_id: string | null;
+        };
+        Insert: {
+          created_at?: string;
+          event_type: string;
+          id?: string;
+          payload: Json;
+          processed_at?: string | null;
+          transaction_code?: string | null;
+          user_id?: string | null;
+        };
+        Update: {
+          created_at?: string;
+          event_type?: string;
+          id?: string;
+          payload?: Json;
+          processed_at?: string | null;
+          transaction_code?: string | null;
+          user_id?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "grow_webhook_events_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
             referencedRelation: "users";
             referencedColumns: ["id"];
           },

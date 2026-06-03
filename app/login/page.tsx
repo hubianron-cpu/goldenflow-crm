@@ -4,7 +4,7 @@ import { StatusMessage } from "@/components/status-message";
 import { hasSupabaseEnv } from "@/lib/env";
 import { signIn } from "@/lib/actions";
 
-const whatsappHref = `https://wa.me/?text=${encodeURIComponent("היי רון, אני רוצה לפתוח מנוי למערכת CRM")}`;
+const paymentHref = "https://meshulam.co.il/s/e89b2737-e347-bbf1-34ce-ca6ba2b0fb94";
 
 export default async function LoginPage({
   searchParams,
@@ -42,8 +42,8 @@ export default async function LoginPage({
         </section>
 
         <section className="panel p-6 lg:p-8">
-          <h2 className="text-2xl font-black">כניסה למערכת</h2>
-          <p className="mt-2 text-sm text-zinc-400">התחברו כדי לנהל לידים, המשימות שלי ומסלול המכירה.</p>
+          <h2 className="text-center text-2xl font-black">כניסה למערכת</h2>
+          <p className="mt-2 text-center text-sm text-zinc-400">התחברו כדי לנהל לידים, המשימות שלי ומסלול המכירה.</p>
 
           <div className="mt-5">
             <StatusMessage error={visibleError} success={params.success} />
@@ -58,11 +58,11 @@ export default async function LoginPage({
 
           <form action={signIn} className="space-y-4">
             <label className="block text-sm font-semibold text-zinc-200">
-              מייל
+              <span className="block text-center">מייל</span>
               <input name="email" type="email" className="field mt-2" required disabled={!supabaseReady} />
             </label>
             <label className="block text-sm font-semibold text-zinc-200">
-              סיסמה
+              <span className="block text-center">סיסמה</span>
               <input name="password" type="password" className="field mt-2" minLength={6} required disabled={!supabaseReady} />
             </label>
             <button type="submit" className="button-primary w-full gap-2" disabled={!supabaseReady}>
@@ -78,8 +78,8 @@ export default async function LoginPage({
             <Link href="/register" className="button-secondary mt-3 w-full">
               פתח חשבון ניסיון ל־14 יום
             </Link>
-            <a href={whatsappHref} className="button-secondary mt-3 w-full" target="_blank" rel="noreferrer">
-              פתיחת מנוי למערכת
+            <a href={paymentHref} className="button-secondary mt-3 w-full" target="_blank" rel="noopener noreferrer">
+              לרכישת מנוי בצורה מאובטחת
             </a>
           </div>
         </section>
