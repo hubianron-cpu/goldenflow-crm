@@ -1,7 +1,5 @@
 import { NextResponse } from "next/server";
-import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { hasSupabaseEnv } from "@/lib/env";
-import { getSupabaseAdminClient } from "@/lib/supabase/admin";
+import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 
 export const runtime = "nodejs";
@@ -9,6 +7,12 @@ export const runtime = "nodejs";
 type AdminClient = SupabaseClient<Database>;
 type WebhookPayload = Record<string, unknown>;
 type EventType = "payment_failed" | "subscription_activated" | "ignored";
+type SupabaseErrorLike = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const SUCCESS_STATUS_CODES = new Set(["0", "00", "000", "1", "200"]);
@@ -17,6 +21,51 @@ const FAILURE_WORDS = ["fail", "failed", "failure", "declined", "denied", "error
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status });
+}
+
+function logSupabaseError(label: string, error: SupabaseErrorLike) {
+  console.error(label, {
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    message: error.message,
+  });
+}
+
+function getGrowWebhookKey() {
+  return process.env.GROW_WEBHOOK_KEY?.trim() || "";
+}
+
+function getWebhookAdminClient() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+  if (!supabaseUrl) {
+    return {
+      client: null,
+      error: "Supabase URL is not configured",
+      status: 500,
+    };
+  }
+
+  if (!serviceRoleKey) {
+    return {
+      client: null,
+      error: "Supabase service role is not configured",
+      status: 500,
+    };
+  }
+
+  return {
+    client: createClient<Database>(supabaseUrl, serviceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }),
+    error: null,
+    status: 200,
+  };
 }
 
 function cleanText(value: unknown) {
@@ -201,7 +250,7 @@ async function getUserByEmail(serviceSupabase: AdminClient, email: string): Prom
     const { data, error } = await serviceSupabase.auth.admin.listUsers({ page, perPage: 1000 });
 
     if (error) {
-      console.error("GROW_WEBHOOK_USER_EMAIL_LOOKUP_FAILED", { page });
+      console.error("GROW_WEBHOOK_USER_EMAIL_LOOKUP_FAILED", { message: error.message, page });
       return null;
     }
 
@@ -276,17 +325,26 @@ async function hasProcessedTransaction(serviceSupabase: AdminClient, transaction
     return false;
   }
 
+  console.info("GROW_EVENT_LOOKUP_STARTED", { transactionCode });
+
   const { data, error } = await serviceSupabase
     .from("grow_webhook_events")
     .select("id")
     .eq("transaction_code", transactionCode)
-    .maybeSingle();
+    .limit(1);
 
   if (error) {
+    logSupabaseError("GROW_EVENT_LOOKUP_FAILED", error);
     throw new Error("GROW_EVENT_LOOKUP_FAILED");
   }
 
-  return Boolean(data);
+  if (!data.length) {
+    console.info("GROW_EVENT_LOOKUP_NO_EXISTING_EVENT", { transactionCode });
+    return false;
+  }
+
+  console.info("GROW_EVENT_DUPLICATE_IGNORED", { transactionCode });
+  return true;
 }
 
 async function saveWebhookEvent(
@@ -300,14 +358,22 @@ async function saveWebhookEvent(
     event_type: eventType,
     payload: getJsonPayloadForStorage(payload),
     processed_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
     transaction_code: transactionCode || null,
     user_id: userId,
   });
 
-  if (error && error.code !== "23505") {
-    console.error("GROW_WEBHOOK_EVENT_SAVE_FAILED", { eventType });
-    throw new Error("GROW_EVENT_SAVE_FAILED");
+  if (error) {
+    if (error.code === "23505") {
+      console.info("GROW_EVENT_DUPLICATE_IGNORED", { eventType, transactionCode });
+      return;
+    }
+
+    logSupabaseError("GROW_EVENT_INSERT_FAILED", error);
+    throw new Error("GROW_EVENT_INSERT_FAILED");
   }
+
+  console.info("GROW_EVENT_INSERTED", { eventType, transactionCode });
 }
 
 async function activateSubscription(
@@ -318,16 +384,16 @@ async function activateSubscription(
   const nowIso = new Date().toISOString();
   const { data: existingSubscription, error: existingError } = await serviceSupabase
     .from("user_subscriptions")
-    .select("user_id,upgraded_at")
+    .select("user_id,created_at,trial_start_at,upgraded_at")
     .eq("user_id", userId)
     .maybeSingle();
 
   if (existingError) {
+    logSupabaseError("GROW_SUBSCRIPTION_LOOKUP_FAILED", existingError);
     throw new Error("GROW_SUBSCRIPTION_LOOKUP_FAILED");
   }
 
   const payload = {
-    created_at: nowIso,
     grow_direct_debit_id: details.directDebitId || null,
     grow_last_payment_date: details.paymentDate || nowIso,
     grow_last_payment_sum: details.paymentSum,
@@ -341,9 +407,15 @@ async function activateSubscription(
     user_id: userId,
   };
 
-  const { error } = await serviceSupabase.from("user_subscriptions").upsert(payload, { onConflict: "user_id" });
+  const result = existingSubscription
+    ? await serviceSupabase.from("user_subscriptions").update(payload).eq("user_id", userId)
+    : await serviceSupabase.from("user_subscriptions").insert({
+        ...payload,
+        created_at: nowIso,
+      });
 
-  if (error) {
+  if (result.error) {
+    logSupabaseError("GROW_SUBSCRIPTION_UPDATE_FAILED", result.error);
     throw new Error("GROW_SUBSCRIPTION_ACTIVATION_FAILED");
   }
 }
@@ -368,18 +440,15 @@ async function markPaymentFailed(
     .eq("user_id", userId);
 
   if (error) {
+    logSupabaseError("GROW_PAYMENT_FAILURE_UPDATE_FAILED", error);
     throw new Error("GROW_PAYMENT_FAILURE_UPDATE_FAILED");
   }
 }
 
 export async function POST(request: Request) {
-  console.info("Grow webhook received");
+  console.info("GROW_WEBHOOK_RECEIVED");
 
-  if (!hasSupabaseEnv()) {
-    return jsonResponse({ error: "Server configuration error" }, 503);
-  }
-
-  const expectedWebhookKey = process.env.GROW_WEBHOOK_KEY?.trim();
+  const expectedWebhookKey = getGrowWebhookKey();
 
   if (!expectedWebhookKey) {
     console.error("GROW_WEBHOOK_KEY_MISSING");
@@ -398,35 +467,36 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
-  console.info("Grow webhook verified");
+  console.info("GROW_WEBHOOK_VERIFIED");
 
-  const serviceSupabase = getSupabaseAdminClient();
+  const adminClientResult = getWebhookAdminClient();
 
-  if (!serviceSupabase) {
-    console.error("GROW_WEBHOOK_SERVICE_ROLE_MISSING");
-    return jsonResponse({ error: "Server configuration error" }, 500);
+  if (!adminClientResult.client) {
+    console.error("GROW_WEBHOOK_ADMIN_CLIENT_MISSING", { reason: adminClientResult.error });
+    return jsonResponse({ error: adminClientResult.error || "Server configuration error" }, adminClientResult.status);
   }
 
+  const serviceSupabase = adminClientResult.client;
   const details = getWebhookDetails(payload);
 
   try {
     if (details.transactionCode && await hasProcessedTransaction(serviceSupabase, details.transactionCode)) {
-      console.info("duplicate transaction ignored");
       return jsonResponse({ ok: true, duplicate: true });
     }
 
+    console.info("GROW_USER_LOOKUP_STARTED", { payerEmail: details.payerEmail, transactionCode: details.transactionCode });
     const user = await findMatchingUser(serviceSupabase, payload, details);
 
     if (!user) {
-      console.info("no matching user found");
+      console.info("GROW_USER_NOT_FOUND", { payerEmail: details.payerEmail, transactionCode: details.transactionCode });
       await saveWebhookEvent(serviceSupabase, payload, "ignored", details.transactionCode, null);
       return jsonResponse({ ok: true, matched: false });
     }
 
-    console.info("matching GoldenFlow CRM user found");
+    console.info("GROW_USER_FOUND", { transactionCode: details.transactionCode });
 
     if (details.isFailedPayment) {
-      console.info("failed recurring payment received");
+      console.info("GROW_PAYMENT_FAILED_EVENT_RECEIVED", { transactionCode: details.transactionCode });
       await markPaymentFailed(serviceSupabase, user.id, details);
       await saveWebhookEvent(serviceSupabase, payload, "payment_failed", details.transactionCode, user.id);
       return jsonResponse({ ok: true, status: "payment_failed" });
@@ -437,9 +507,10 @@ export async function POST(request: Request) {
       return jsonResponse({ ok: true, ignored: true });
     }
 
+    console.info("GROW_SUBSCRIPTION_UPDATE_STARTED", { transactionCode: details.transactionCode });
     await activateSubscription(serviceSupabase, user.id, details);
     await saveWebhookEvent(serviceSupabase, payload, "subscription_activated", details.transactionCode, user.id);
-    console.info("GoldenFlow CRM subscription activated");
+    console.info("GROW_SUBSCRIPTION_UPDATED", { transactionCode: details.transactionCode });
 
     return jsonResponse({ ok: true, status: "active" });
   } catch (error) {
