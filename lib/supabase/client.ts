@@ -17,7 +17,7 @@ export function getSupabaseClient() {
     auth: {
       autoRefreshToken: true,
       detectSessionInUrl: true,
-      persistSession: false,
+      persistSession: true,
     },
   });
 
