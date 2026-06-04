@@ -32,6 +32,17 @@ function logSupabaseError(label: string, error: SupabaseErrorLike) {
   });
 }
 
+function logGrowEventError(label: string, error: SupabaseErrorLike, context: Record<string, unknown>) {
+  console.error(label, {
+    ...context,
+    code: error.code,
+    details: error.details,
+    hint: error.hint,
+    message: error.message,
+    schema: "public",
+  });
+}
+
 function getGrowWebhookKey() {
   return process.env.GROW_WEBHOOK_KEY?.trim() || "";
 }
@@ -331,14 +342,17 @@ async function hasProcessedTransaction(serviceSupabase: AdminClient, transaction
     .from("grow_webhook_events")
     .select("id")
     .eq("transaction_code", transactionCode)
-    .limit(1);
+    .maybeSingle();
 
   if (error) {
-    logSupabaseError("GROW_EVENT_LOOKUP_FAILED", error);
+    logGrowEventError("GROW_EVENT_LOOKUP_FAILED", error, {
+      table: "grow_webhook_events",
+      transactionCode,
+    });
     throw new Error("GROW_EVENT_LOOKUP_FAILED");
   }
 
-  if (!data.length) {
+  if (!data) {
     console.info("GROW_EVENT_LOOKUP_NO_EXISTING_EVENT", { transactionCode });
     return false;
   }
@@ -369,7 +383,11 @@ async function saveWebhookEvent(
       return;
     }
 
-    logSupabaseError("GROW_EVENT_INSERT_FAILED", error);
+    logGrowEventError("GROW_EVENT_INSERT_FAILED", error, {
+      eventType,
+      table: "grow_webhook_events",
+      transactionCode,
+    });
     throw new Error("GROW_EVENT_INSERT_FAILED");
   }
 
@@ -446,6 +464,7 @@ async function markPaymentFailed(
 }
 
 export async function POST(request: Request) {
+  console.info("Grow webhook received");
   console.info("GROW_WEBHOOK_RECEIVED");
 
   const expectedWebhookKey = getGrowWebhookKey();
@@ -467,9 +486,14 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
+  console.info("Grow webhook verified");
   console.info("GROW_WEBHOOK_VERIFIED");
 
   const adminClientResult = getWebhookAdminClient();
+  console.info("GROW_SUPABASE_ADMIN_CLIENT_READY", {
+    hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
+    hasSupabaseUrl: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()),
+  });
 
   if (!adminClientResult.client) {
     console.error("GROW_WEBHOOK_ADMIN_CLIENT_MISSING", { reason: adminClientResult.error });
@@ -490,7 +514,7 @@ export async function POST(request: Request) {
     if (!user) {
       console.info("GROW_USER_NOT_FOUND", { payerEmail: details.payerEmail, transactionCode: details.transactionCode });
       await saveWebhookEvent(serviceSupabase, payload, "ignored", details.transactionCode, null);
-      return jsonResponse({ ok: true, matched: false });
+      return jsonResponse({ ok: true, message: "No matching user found" });
     }
 
     console.info("GROW_USER_FOUND", { transactionCode: details.transactionCode });
