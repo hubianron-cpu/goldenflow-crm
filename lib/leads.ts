@@ -181,10 +181,10 @@ export function getRescueActivityLabel(lead: Lead) {
   const days = getDaysSinceLastActivity(lead);
 
   if (days >= 999) {
-    return "אין תיעוד קשר אחרון";
+    return "אין תיעוד קשר — כדאי לבדוק מה הצעד הבא";
   }
 
-  return `עברו ${days} ימים מאז קשר אחרון`;
+  return `${days} ימים בלי פעולה — בסיכון להיעלם`;
 }
 
 export function getRescueActionLabel(lead: Lead) {
@@ -299,7 +299,7 @@ export function getLeadTemperature(lead: Lead) {
   if (score >= 75) {
     return {
       color: "border-gold/30 bg-gold/10 text-gold-soft",
-      label: "🔥 חם",
+      label: "ליד חם",
       score,
     };
   }
@@ -307,14 +307,14 @@ export function getLeadTemperature(lead: Lead) {
   if (score >= 50) {
     return {
       color: "border-gold/30 bg-gold/10 text-gold-soft",
-      label: "🟡 חמים",
+      label: "ליד מתחמם",
       score,
     };
   }
 
   return {
     color: "border-process/30 bg-process/10 text-blue-200",
-    label: "🔵 קר",
+    label: "ליד קר",
     score,
   };
 }

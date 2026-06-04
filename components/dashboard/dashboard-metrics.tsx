@@ -122,23 +122,23 @@ function getPriority(lead: Lead) {
 
   if (score >= 75 || days >= 3 || value >= 10000) {
     return {
-      label: "עדיפות גבוהה",
-      short: "High",
+      label: "דחוף — כדאי לטפל היום",
+      short: "דחוף",
       className: "border-danger/40 bg-danger/10 text-red-100",
     };
   }
 
   if (score >= 50 || days >= 2 || value >= 3500) {
     return {
-      label: "עדיפות בינונית",
-      short: "Medium",
+      label: "כדאי לחזור היום",
+      short: "היום",
       className: "border-gold/35 bg-gold/10 text-gold-soft",
     };
   }
 
   return {
-    label: "יציב",
-    short: "Low",
+    label: "במעקב רגוע",
+    short: "מעקב",
     className: "border-success/35 bg-success/10 text-green-100",
   };
 }
@@ -147,22 +147,22 @@ function getActionReason(lead: Lead) {
   const days = getDaysSinceActivity(lead);
 
   if (!lead.last_contact_date) {
-    return "אין תיעוד קשר - להתחיל שיחה";
+    return "אין תיעוד קשר — כדאי לפתוח שיחה ראשונה";
   }
 
   if (days >= STUCK_AFTER_DAYS) {
-    return "תקוע במסלול המכירה - להחזיר תנועה";
+    return `עברו ${days} ימים בלי המשך — כדאי לחזור היום`;
   }
 
   if ((lead.value || 0) >= 10000) {
-    return "שווי גבוה - לקדם שלב";
+    return "כסף פתוח — כדאי לקדם לשלב הבא";
   }
 
   if (lead.next_action_date) {
-    return `פעולה מתוכננת: ${getNextActionLabel(lead.next_action_type)}`;
+    return `למה לטפל היום: ${getNextActionLabel(lead.next_action_type)}`;
   }
 
-  return "בדיקת סטטוס קצרה";
+  return "הליד מחכה לפעולה — כדאי לבדוק מה הצעד הבא.";
 }
 
 function getStagePriority(status: string) {
@@ -200,23 +200,23 @@ function getDailyReason(lead: Lead) {
   const days = getDaysSinceActivity(lead);
 
   if ((lead.value || 0) >= 5000) {
-    reasons.push("שווי גבוה");
+    reasons.push("כסף פתוח");
   }
 
   if (days >= STUCK_AFTER_DAYS) {
-    reasons.push(`לא עודכן ${days} ימים`);
+    reasons.push(`${days} ימים בלי פעולה — בסיכון להיעלם`);
   }
 
   if (lead.next_action_date && new Date(lead.next_action_date).getTime() <= Date.now()) {
-    reasons.push("פעולה מתוכננת להיום");
+    reasons.push("פעולה שתוכננה להיום");
   }
 
   if (["הצעה נשלחה", "ממתין לתגובה"].includes(normalizeLeadStatus(lead.status))) {
-    reasons.push("קרוב לסגירה");
+    reasons.push("הזדמנות סגירה שכדאי לקדם היום");
   }
 
   if (normalizeLeadStatus(lead.status) === "דורש המשך טיפול") {
-    reasons.push("צריך החזרה למסלול המכירה");
+    reasons.push("צריך פולואפ היום");
   }
 
   return reasons.length ? reasons.join(" + ") : getActionReason(lead);
@@ -283,6 +283,11 @@ export function DashboardMetrics() {
   const [actionImpact, setActionImpact] = useState("");
   const [focusedLeadId, setFocusedLeadId] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
+  const [dailyFlowStarted, setDailyFlowStarted] = useState(false);
+  const [dailyFlowIndex, setDailyFlowIndex] = useState(0);
+  const [dailyFlowSkippedIds, setDailyFlowSkippedIds] = useState<string[]>([]);
+  const [dailyFlowReviewedIds, setDailyFlowReviewedIds] = useState<string[]>([]);
+  const [dailyFlowCopied, setDailyFlowCopied] = useState(false);
   const [handledLeadIds, setHandledLeadIds] = useState<string[]>([]);
   const [expandedDailyLeadId, setExpandedDailyLeadId] = useState<string | null>(null);
   const [handledToday, setHandledToday] = useState(0);
@@ -527,6 +532,92 @@ export function DashboardMetrics() {
   const dailyProgress = dailyTarget > 0 ? Math.min(100, Math.round((closedTodayRevenue / dailyTarget) * 100)) : 0;
   const dailyGap = Math.max(0, dailyTarget - closedTodayRevenue);
   const dailyTargetReached = closedTodayRevenue >= dailyTarget && dailyTarget > 0;
+  const dailyFlowLead = closingQueue[dailyFlowIndex] ?? null;
+  const dailyFlowOpenMoney = closingQueue.reduce((sum, lead) => sum + (lead.value || 0), 0);
+  const dailyFlowHotLeads = closingQueue.filter((lead) => getLeadScore(lead) >= 75).length;
+  const dailyFlowRiskLeads = closingQueue.filter((lead) => !lead.last_contact_date || getDaysSinceActivity(lead) >= STUCK_AFTER_DAYS).length;
+  const dailyFlowReviewedMoney = leads
+    .filter((lead) => dailyFlowReviewedIds.includes(lead.id))
+    .reduce((sum, lead) => sum + (lead.value || 0), 0);
+  const dailyFlowCompleted = dailyFlowStarted && (closingQueue.length === 0 || dailyFlowIndex >= closingQueue.length);
+  const dailyFlowMessage = dailyFlowLead
+    ? getScriptSuggestion(dailyFlowLead) ||
+      `היי ${dailyFlowLead.name || "שם"}, רציתי לבדוק אם זה עדיין רלוונטי עבורך ואם תרצה/י שנתקדם בצעד הבא.`
+    : "";
+
+  useEffect(() => {
+    if (!focusMode || !dailyFlowStarted) {
+      return;
+    }
+
+    setDailyFlowIndex((current) => Math.min(current, closingQueue.length));
+  }, [closingQueue.length, dailyFlowStarted, focusMode]);
+
+  function enterDailyClosingMode() {
+    markUserAction();
+    setFocusMode(true);
+    setDailyFlowStarted(false);
+    setDailyFlowIndex(0);
+    setDailyFlowSkippedIds([]);
+    setDailyFlowReviewedIds([]);
+    setDailyFlowCopied(false);
+  }
+
+  function exitDailyClosingMode() {
+    markUserAction();
+    setFocusMode(false);
+    setDailyFlowStarted(false);
+    setDailyFlowIndex(0);
+    setDailyFlowSkippedIds([]);
+    setDailyFlowReviewedIds([]);
+    setDailyFlowCopied(false);
+  }
+
+  function startDailyClosingFlow() {
+    markUserAction();
+    setDailyFlowStarted(true);
+    setDailyFlowIndex(0);
+    setDailyFlowSkippedIds([]);
+    setDailyFlowReviewedIds([]);
+    setDailyFlowCopied(false);
+  }
+
+  function rememberDailyFlowLead(leadId: string) {
+    setDailyFlowReviewedIds((current) => (current.includes(leadId) ? current : [...current, leadId]));
+  }
+
+  function goToNextDailyFlowLead(leadId?: string) {
+    markUserAction();
+    if (leadId) {
+      rememberDailyFlowLead(leadId);
+    }
+    setDailyFlowCopied(false);
+    setDailyFlowIndex((current) => current + 1);
+  }
+
+  function goToPreviousDailyFlowLead() {
+    markUserAction();
+    setDailyFlowCopied(false);
+    setDailyFlowIndex((current) => Math.max(0, current - 1));
+  }
+
+  function skipDailyFlowLead(leadId: string) {
+    setDailyFlowSkippedIds((current) => (current.includes(leadId) ? current : [...current, leadId]));
+    goToNextDailyFlowLead(leadId);
+  }
+
+  async function copyDailyFlowMessage(message: string) {
+    markUserAction();
+    setError("");
+
+    try {
+      await navigator.clipboard.writeText(message);
+      setDailyFlowCopied(true);
+      setSuccess("ההודעה הועתקה");
+    } catch {
+      setError("לא הצלחנו להעתיק את ההודעה. אפשר לסמן ולהעתיק ידנית.");
+    }
+  }
 
   async function returnToPipeline(lead: Lead) {
     markUserAction();
@@ -919,7 +1010,7 @@ export function DashboardMetrics() {
             </div>
             <button
               className={`${focusMode ? "button-secondary" : "button-primary"} mt-4 w-full`}
-              onClick={() => setFocusMode((current) => !current)}
+              onClick={focusMode ? exitDailyClosingMode : enterDailyClosingMode}
               type="button"
             >
               {focusMode ? "יציאה ממצב סגירה" : "🔥 מצב סגירה"}
@@ -927,7 +1018,196 @@ export function DashboardMetrics() {
           </div>
         </div>
 
-        {nextActionLead ? (
+        {focusMode && !dailyFlowStarted ? (
+          <div className="mx-auto mt-9 w-full max-w-3xl rounded-[30px] border border-gold/30 bg-black/35 p-5 text-center shadow-[0_0_60px_rgba(201,162,39,0.14)] sm:p-8">
+            {closingQueue.length === 0 ? (
+              <>
+                <p className="text-4xl">🔥</p>
+                <h3 className="mt-4 text-2xl font-semibold sm:text-3xl">אין כרגע לידים דחופים לטיפול</h3>
+                <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-zinc-400">
+                  כל הכבוד — אין כסף שמחכה לפולואפ כרגע.
+                </p>
+                <button className="button-primary mt-6" onClick={exitDailyClosingMode} type="button">
+                  חזרה לדשבורד
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">Daily Closing Flow</p>
+                <h3 className="mt-3 text-[clamp(2rem,8vw,3.4rem)] font-semibold tracking-tight">מצב סגירה יומי</h3>
+                <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-300 sm:text-base">
+                  נעבור יחד על הלידים שאסור לפספס היום.
+                </p>
+                <div className="mt-6 grid gap-3 text-center sm:grid-cols-4">
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
+                    <p className="text-2xl font-semibold text-white">{closingQueue.length}</p>
+                    <p className="mt-1 text-xs text-zinc-500">לידים לטיפול היום</p>
+                  </div>
+                  <div className="rounded-2xl border border-gold/25 bg-gold/10 p-3">
+                    <p className="text-2xl font-semibold text-gold-soft">{formatMoney(dailyFlowOpenMoney)}</p>
+                    <p className="mt-1 text-xs text-zinc-500">כסף פתוח לטיפול</p>
+                  </div>
+                  <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3">
+                    <p className="text-2xl font-semibold text-white">{dailyFlowHotLeads}</p>
+                    <p className="mt-1 text-xs text-zinc-500">לידים חמים</p>
+                  </div>
+                  <div className="rounded-2xl border border-danger/25 bg-danger/10 p-3">
+                    <p className="text-2xl font-semibold text-red-100">{dailyFlowRiskLeads}</p>
+                    <p className="mt-1 text-xs text-zinc-500">בסיכון להיעלם</p>
+                  </div>
+                </div>
+                <p className="mt-5 text-sm font-semibold text-gold-soft">
+                  כל פעולה כאן יכולה לקרב אותך לסגירה.
+                </p>
+                <button className="button-primary mt-6 w-full sm:w-auto" onClick={startDailyClosingFlow} type="button">
+                  התחל סגירה יומית
+                </button>
+              </>
+            )}
+          </div>
+        ) : focusMode && dailyFlowCompleted ? (
+          <div className="mx-auto mt-10 max-w-2xl rounded-[30px] border border-gold/25 bg-black/35 p-6 text-center shadow-[0_0_55px_rgba(201,162,39,0.12)] sm:p-8">
+            <p className="text-4xl">🔥</p>
+            <h3 className="mt-4 text-2xl font-semibold sm:text-3xl">סיימת את הסגירה היומית</h3>
+            <p className="mt-3 text-sm leading-6 text-zinc-400">
+              עברת היום על {dailyFlowReviewedIds.length} לידים וטיפלת ב־{formatMoney(dailyFlowReviewedMoney)} כסף פתוח.
+            </p>
+            {dailyFlowSkippedIds.length > 0 ? (
+              <p className="mt-2 text-sm leading-6 text-zinc-400">
+                דילגת על {dailyFlowSkippedIds.length} לידים — אפשר לחזור אליהם מאוחר יותר.
+              </p>
+            ) : null}
+            <p className="mt-3 text-sm font-semibold text-gold-soft">
+              כל הכבוד — עשית את הפעולות החשובות של היום.
+            </p>
+            <div className="mt-6 grid gap-3 sm:grid-cols-3">
+              <button className="button-primary" onClick={exitDailyClosingMode} type="button">
+                חזרה לדשבורד
+              </button>
+              <Link className="button-secondary" href="/leads">
+                צפה בלידים
+              </Link>
+              <button className="button-secondary" onClick={startDailyClosingFlow} type="button">
+                התחל שוב
+              </button>
+            </div>
+          </div>
+        ) : focusMode && dailyFlowLead ? (
+          <div className="mx-auto mt-9 flex w-full max-w-3xl flex-col items-center justify-center gap-5">
+            <div className="text-center">
+              <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">
+                ליד {dailyFlowIndex + 1} מתוך {closingQueue.length}
+              </p>
+              <h3 className="mt-2 text-[clamp(1.5rem,7vw,2.25rem)] font-semibold tracking-tight sm:text-4xl">
+                זה הליד הבא שכדאי לטפל בו
+              </h3>
+            </div>
+            <div className="number-rise w-full max-w-full rounded-[30px] border border-gold/30 bg-black/35 p-4 text-center shadow-[0_0_60px_rgba(201,162,39,0.14)] sm:p-8">
+              <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-6">
+                <div className="w-full text-center">
+                  <div className="flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-2xl">{getUrgencyIcon(dailyFlowLead)}</span>
+                    <h3 className="min-w-0 break-words text-[clamp(2rem,10vw,3.75rem)] font-semibold [overflow-wrap:anywhere] sm:text-6xl">
+                      {dailyFlowLead.name || "ליד ללא שם"}
+                    </h3>
+                    <span className={`rounded-full border px-3 py-1 text-xs ${getPriority(dailyFlowLead).className}`}>
+                      {getLeadTemperature(dailyFlowLead).label}
+                    </span>
+                  </div>
+                  <p className="mt-5 whitespace-nowrap text-[clamp(2.5rem,13vw,4.5rem)] font-semibold tracking-tight text-gold-soft [direction:ltr] sm:text-7xl">
+                    {(dailyFlowLead.value || 0) > 0 ? formatMoney(dailyFlowLead.value) : "שווי עסקה לא הוגדר"}
+                  </p>
+                  <div className="mt-5 flex flex-wrap justify-center gap-2">
+                    <span className={`rounded-full border px-3 py-1 text-sm ${getLeadStatusColor(dailyFlowLead.status)}`}>{dailyFlowLead.status}</span>
+                    <span className={`rounded-full border px-3 py-1 text-sm ${getPriority(dailyFlowLead).className}`}>{getPriority(dailyFlowLead).label}</span>
+                    <span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-sm text-gold-soft">ציון {getDailyPriorityScore(dailyFlowLead)}</span>
+                  </div>
+                  <div className="mx-auto mt-6 grid w-full max-w-2xl gap-3 text-center text-sm sm:grid-cols-2">
+                    <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
+                      טלפון: <strong className="text-white">{dailyFlowLead.phone || "אין טלפון"}</strong>
+                    </p>
+                    <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
+                      מקור ליד: <strong className="text-white">{dailyFlowLead.source || "לא הוגדר"}</strong>
+                    </p>
+                    <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
+                      פעולה אחרונה: <strong className="text-white">{formatDate(dailyFlowLead.last_contact_date)}</strong>
+                    </p>
+                    <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
+                      פעולה הבאה: <strong className="text-white">{formatDate(dailyFlowLead.next_action_date)}</strong>
+                    </p>
+                  </div>
+                </div>
+                <div className="grid w-full gap-4 text-right">
+                  <div className="rounded-3xl border border-gold/20 bg-gold/10 p-5">
+                    <p className="text-sm font-semibold text-gold-soft">למה לטפל עכשיו?</p>
+                    <p className="mt-2 text-base leading-7 text-white">
+                      {getDailyReason(dailyFlowLead) || "הליד מחכה לפעולה — כדאי לבדוק מה הצעד הבא."}
+                    </p>
+                  </div>
+                  <div className="rounded-3xl border border-gold/20 bg-gold/10 p-5">
+                    <p className="text-sm font-semibold text-gold-soft">מה כדאי לעשות?</p>
+                    <p className="mt-2 text-base leading-7 text-white">{getRecommendedAction(dailyFlowLead) || "בדוק מה הצעד הבא מול הליד"}</p>
+                  </div>
+                  <div className="rounded-3xl border border-white/10 bg-black/25 p-5">
+                    <p className="text-sm font-semibold text-zinc-400">הודעה מוכנה לשליחה</p>
+                    <p className="mt-3 whitespace-pre-line rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-200">
+                      {dailyFlowMessage}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="w-full rounded-[28px] border border-white/10 bg-black/30 p-4">
+              <div className="mx-auto grid w-full max-w-2xl gap-3 sm:grid-cols-2">
+                {dailyFlowLead.phone ? (
+                  <a
+                    className="button-primary min-h-14 gap-2 px-5 py-3 text-base"
+                    href={getWhatsappUrl(dailyFlowLead.phone, dailyFlowMessage)}
+                    onClick={() => {
+                      markUserAction();
+                      setCompletedInteractions((current) => current + 1);
+                    }}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    פתח בוואטסאפ
+                  </a>
+                ) : (
+                  <span className="button-secondary min-h-14 cursor-not-allowed opacity-60">
+                    אין מספר טלפון לפתיחת וואטסאפ
+                  </span>
+                )}
+                <button className="button-secondary min-h-14" onClick={() => copyDailyFlowMessage(dailyFlowMessage)} type="button">
+                  {dailyFlowCopied ? "ההודעה הועתקה" : "העתק הודעה"}
+                </button>
+                <button
+                  className="button-secondary min-h-12"
+                  disabled={updatingLeadId === dailyFlowLead.id}
+                  onClick={() => {
+                    rememberDailyFlowLead(dailyFlowLead.id);
+                    void handleLeadHandled(dailyFlowLead.id);
+                  }}
+                  type="button"
+                >
+                  סמן שטופל
+                </button>
+                <button className="button-secondary min-h-12" onClick={() => skipDailyFlowLead(dailyFlowLead.id)} type="button">
+                  דלג
+                </button>
+                <button className="button-secondary min-h-12" disabled={dailyFlowIndex === 0} onClick={goToPreviousDailyFlowLead} type="button">
+                  קודם
+                </button>
+                <button className="button-primary min-h-12" onClick={() => goToNextDailyFlowLead(dailyFlowLead.id)} type="button">
+                  הבא
+                </button>
+                <button className="button-secondary min-h-12 sm:col-span-2" onClick={exitDailyClosingMode} type="button">
+                  יציאה
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : nextActionLead ? (
           <div className="mx-auto mt-9 flex w-full max-w-3xl flex-col items-center justify-center gap-5">
             <div className="text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">Next Best Action</p>
@@ -956,7 +1236,7 @@ export function DashboardMetrics() {
                       טלפון: <strong className="text-white">{nextActionLead.phone || "אין טלפון"}</strong>
                     </p>
                     <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
-                      קשר אחרון: <strong className="text-white">{formatDate(nextActionLead.last_contact_date)}</strong>
+                      פעולה אחרונה: <strong className="text-white">{formatDate(nextActionLead.last_contact_date)}</strong>
                     </p>
                     <p className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
                       פעולה הבאה: <strong className="text-white">{formatDate(nextActionLead.next_action_date)}</strong>
@@ -1095,8 +1375,8 @@ export function DashboardMetrics() {
           {[
             {
               key: "actionToday",
-              label: "🔥 לידים לטיפול היום",
-              microcopy: "לידים חדשים שצריך לפעול עליהם עכשיו",
+              label: "🔥 למי לחזור היום",
+              microcopy: "לידים שכדאי לטפל בהם עכשיו לפני שהם מתקררים",
               tone: "border-gold/35 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.18),rgba(255,255,255,0.035)_46%,rgba(0,0,0,0.12))] shadow-[0_0_34px_rgba(201,162,39,0.12)]",
               leads: metrics.dailyClosing.actionToday,
             },
@@ -1116,8 +1396,8 @@ export function DashboardMetrics() {
             },
             {
               key: "followUp",
-              label: "♻️ לידים להמשך טיפול",
-              microcopy: "לידים שלא התקדמו וצריך להחזיר לפעולה",
+              label: "♻️ כסף שמחכה לפולואפ",
+              microcopy: "לידים שלא התקדמו ועדיין יכולים להפוך לעסקה",
               tone: "border-danger/30 bg-[radial-gradient(circle_at_top_right,rgba(229,72,77,0.16),rgba(255,255,255,0.025)_48%,rgba(0,0,0,0.12))] shadow-[0_0_34px_rgba(229,72,77,0.10)]",
               leads: metrics.dailyClosing.followUp,
             },
@@ -1153,7 +1433,7 @@ export function DashboardMetrics() {
                               </span>
                             </div>
                             <p className="mt-1 truncate text-[11px] text-zinc-500">
-                              קשר: {getDaysSinceActivity(lead) >= 999 ? "אין תיעוד" : `לפני ${getDaysSinceActivity(lead)} ימים`} · {normalizeLeadStatus(lead.status)}
+                              {getDaysSinceActivity(lead) >= 999 ? "אין תיעוד קשר — כדאי לבדוק מה הצעד הבא" : `${getDaysSinceActivity(lead)} ימים בלי פעולה — בסיכון להיעלם`} · {normalizeLeadStatus(lead.status)}
                             </p>
                             <p className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[11px] ${getUrgencyState(lead).className}`}>
                               {getUrgencyState(lead).label}
@@ -1163,7 +1443,7 @@ export function DashboardMetrics() {
                             </p>
                             {group.key === "followUp" ? (
                               <p className="mt-1 text-[11px] font-medium text-red-200">
-                                🔥 עברו {getDaysSinceActivity(lead) >= 999 ? "כמה" : getDaysSinceActivity(lead)} ימים מאז קשר אחרון
+                                🔥 {getDaysSinceActivity(lead) >= 999 ? "עברו כמה ימים בלי פעולה — כדאי לבדוק היום" : `${getDaysSinceActivity(lead)} ימים בלי פעולה — בסיכון להיעלם`}
                               </p>
                             ) : null}
                           </div>
@@ -1288,10 +1568,10 @@ export function DashboardMetrics() {
           {
             accent: metrics.moneyAtRisk > 0 ? "from-danger/20 to-danger/5" : "from-success/15 to-gold/5",
             icon: AlertTriangle,
-            label: "כסף בסיכון",
-            meta: "שווי לידים בלי פעילות מעל 3 ימים",
+            label: "כסף שמחכה לפולואפ",
+            meta: "שווי לידים שלא הייתה עליהם פעולה מעל 3 ימים",
             rawValue: metrics.moneyAtRisk,
-            sublabel: metrics.moneyAtRisk > 0 ? "דורש פעולה עכשיו" : "אין סיכון חריג",
+            sublabel: metrics.moneyAtRisk > 0 ? "כדאי לטפל היום לפני שהלידים מתקררים" : "אין כסף חריג שמחכה לפולואפ",
             tone: metrics.moneyAtRisk > 0 ? "text-red-200" : "text-green-100",
             value: formatMoney(metrics.moneyAtRisk),
           },
@@ -1325,8 +1605,8 @@ export function DashboardMetrics() {
               <Bell className="h-4 w-4" />
             </span>
             <div>
-              <h3 className="text-xl font-semibold tracking-tight text-white">🔥 לידים לטיפול היום</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400/80">פעולה שתוכננה להיום או לידים בלי קשר ב-2-3 הימים האחרונים.</p>
+              <h3 className="text-xl font-semibold tracking-tight text-white">🔥 למי לחזור היום</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400/80">לידים שכדאי לטפל בהם היום לפני שהם מתקררים או נעלמים.</p>
             </div>
           </div>
           <span className="rounded-full border border-danger/30 bg-danger/10 px-4 py-1.5 text-sm font-medium text-red-100 shadow-[0_0_24px_rgba(229,72,77,0.10)]">
@@ -1368,14 +1648,14 @@ export function DashboardMetrics() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="text-lg font-semibold transition group-hover:text-gold-soft">{lead.name}</h4>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${temperature.color}`}>
-                          {temperature.label} · {temperature.score}
+                          {temperature.label} · {temperature.score} — לטיפול היום
                         </span>
                         <span className={`rounded-full border px-2 py-0.5 text-xs ${priority.className}`}>
-                          Priority: {priority.short}
+                          למה דחוף: {priority.short}
                         </span>
                         {isStuck ? (
                           <span className="rounded-full border border-danger/40 bg-danger/10 px-2 py-0.5 text-xs text-red-200">
-                            תקוע
+                            צריך פולואפ
                           </span>
                         ) : null}
                         <span
@@ -1392,19 +1672,19 @@ export function DashboardMetrics() {
                         ) : null}
                         {!lead.last_contact_date ? (
                           <span className="rounded-full border border-zinc-400/30 bg-white/10 px-2 py-0.5 text-xs text-zinc-200">
-                            אין קשר אחרון
+                            אין תיעוד קשר
                           </span>
                         ) : null}
                       </div>
                       <p className="mt-2 text-sm text-zinc-300">{lead.phone || "אין טלפון"}</p>
                       <p className={days > 2 ? "mt-2 text-sm text-red-100" : "mt-2 text-sm text-zinc-400"}>
-                        קשר אחרון: {formatDate(lead.last_contact_date)} · {days >= 999 ? "אין תיעוד" : days > 0 ? `לפני ${days} ימים` : "היום"}
+                        {days >= 999 ? "אין תיעוד קשר — כדאי לבדוק מה הצעד הבא" : days > 0 ? `לא הייתה פעולה ${days} ימים — הליד בסיכון להיעלם` : "הייתה פעולה היום"}
                       </p>
                       <p className="mt-1 text-sm text-zinc-500">
                         פעולה הבאה: {lead.next_action_date ? `${getNextActionLabel(lead.next_action_type)} · ${formatDate(lead.next_action_date)}` : "לא נקבעה"}
                       </p>
                       <p className="mt-2 inline-flex rounded-full border border-white/10 bg-black/20 px-3 py-1 text-xs text-zinc-300">
-                        Needs action: {getActionReason(lead)}
+                        למה לטפל היום: {getActionReason(lead)}
                       </p>
                     </Link>
                     <span className={`rounded-full border px-3 py-1 text-xs ${getLeadStatusColor(lead.status)}`}>
@@ -1450,8 +1730,8 @@ export function DashboardMetrics() {
               <AlertTriangle className="h-4 w-4" />
             </span>
             <div>
-              <h3 className="text-xl font-semibold tracking-tight text-white">🔥 לידים להחזרה</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400/80">לידים שלא נסגרו ונכנסו למעקב החזרה, מסודרים לפי שווי וחוסר פעילות.</p>
+              <h3 className="text-xl font-semibold tracking-tight text-white">🔥 כסף שמחכה לפולואפ</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400/80">לידים שלא התקדמו ועדיין יכולים להפוך לעסקה אם חוזרים אליהם בזמן.</p>
             </div>
           </div>
           <span className="rounded-full border border-danger/30 bg-danger/10 px-4 py-1.5 text-sm font-medium text-red-100 shadow-[0_0_24px_rgba(229,72,77,0.10)]">
@@ -1463,7 +1743,7 @@ export function DashboardMetrics() {
           <div className="mt-7 flex min-h-[180px] w-full flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-8 text-center opacity-80 transition duration-200 sm:px-8">
             <AlertTriangle className="mb-4 h-5 w-5 text-zinc-500" />
             <p className="mx-auto max-w-[400px] text-sm leading-7 text-zinc-400">
-              אין כרגע לידים להחזרה. כשLead לא מתקדם או פעולה עוברת ללא עדכון, הוא יופיע כאן אוטומטית.
+              אין כרגע כסף שמחכה לפולואפ. כשליד לא מתקדם או פעולה עוברת בלי עדכון, הוא יופיע כאן אוטומטית.
             </p>
           </div>
         ) : (
@@ -1481,10 +1761,10 @@ export function DashboardMetrics() {
                       <div className="flex flex-wrap items-center gap-2">
                         <h4 className="font-semibold">{lead.name}</h4>
                         <span className="rounded-full border border-gold/30 bg-gold/10 px-2 py-0.5 text-xs text-gold-soft">
-                          ציון החזרה {getReactivationScore(lead)}
+                          למה לחזור היום {getReactivationScore(lead)}
                         </span>
                         <span className="rounded-full border border-danger/35 bg-danger/10 px-2 py-0.5 text-xs text-red-100">
-                          דורש החזרה
+                          כדאי לחזור היום
                         </span>
                       </div>
                       <p className="mt-1 text-sm text-zinc-300">{lead.phone || "אין טלפון"}</p>
@@ -1560,7 +1840,7 @@ export function DashboardMetrics() {
                         </span>
                       </div>
                       <p className={getDaysSinceActivity(lead) > 2 ? "mt-1 text-xs text-red-200" : "mt-1 text-xs text-zinc-500"}>
-                        {lead.status} · קשר אחרון {getDaysSinceActivity(lead) >= 999 ? "לא תועד" : `לפני ${getDaysSinceActivity(lead)} ימים`}
+                        {lead.status} · {getDaysSinceActivity(lead) >= 999 ? "אין תיעוד קשר" : `${getDaysSinceActivity(lead)} ימים בלי פעולה — בסיכון`}
                       </p>
                       <p className="mt-1 text-xs text-zinc-500">
                         פעולה הבאה: {lead.next_action_date ? `${getNextActionLabel(lead.next_action_type)} · ${formatDate(lead.next_action_date)}` : "לא נקבעה"}
@@ -1580,11 +1860,11 @@ export function DashboardMetrics() {
               <div className="mb-3 grid h-10 w-10 place-items-center rounded-2xl border border-danger/20 bg-danger/10 text-red-200">
                 <AlertTriangle className="h-4 w-4" />
               </div>
-              <h3 className="text-xl font-semibold tracking-tight text-white">אינדיקטור לידים תקועים</h3>
-              <p className="mt-2 text-sm leading-6 text-zinc-400/80">לידים שלא עודכנו לפחות {STUCK_AFTER_DAYS} ימים.</p>
+              <h3 className="text-xl font-semibold tracking-tight text-white">כסף שמחכה לפולואפ</h3>
+              <p className="mt-2 text-sm leading-6 text-zinc-400/80">לידים שלא הייתה עליהם פעולה לפחות {STUCK_AFTER_DAYS} ימים.</p>
             </div>
             <span className="rounded-2xl border border-danger/25 bg-danger/10 px-4 py-2 text-2xl font-semibold tracking-tight text-red-100 shadow-[0_0_26px_rgba(229,72,77,0.10)]">
-              {metrics.stuckLeads.length} תקועים
+              {metrics.stuckLeads.length} מחכים לפעולה
             </span>
           </div>
 
@@ -1592,7 +1872,7 @@ export function DashboardMetrics() {
             <div className="mt-6 flex min-h-[150px] flex-1 flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-8 text-center opacity-80">
               <Activity className="mb-4 h-5 w-5 text-zinc-500" />
               <p className="mx-auto max-w-[400px] text-sm leading-7 text-zinc-400">
-                אין לידים תקועים כרגע.
+                אין כרגע לידים שמחכים לפולואפ.
               </p>
             </div>
           ) : (
@@ -1602,11 +1882,11 @@ export function DashboardMetrics() {
                   <div>
                     <p className="font-medium">{lead.name}</p>
                     <p className="mt-1 text-xs text-zinc-500">
-                      {lead.status} · {getDaysSinceActivity(lead)} ימים ללא עדכון
+                      {lead.status} · {getDaysSinceActivity(lead)} ימים בלי פעולה — צריך פולואפ
                     </p>
                   </div>
                   <span className="rounded-full border border-danger/40 bg-danger/10 px-2 py-1 text-xs text-red-200">
-                    תקוע
+                    צריך פולואפ
                   </span>
                 </div>
               ))}

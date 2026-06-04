@@ -61,7 +61,20 @@ function formatDate(value: string | null) {
 
 function formatDaysSinceActivity(lead: Lead) {
   const days = getDaysSinceLastActivity(lead);
-  return days >= 999 ? "אין תיעוד קשר" : days === 0 ? "היום" : `לפני ${days} ימים`;
+  return days >= 999 ? "אין תיעוד קשר — כדאי לבדוק מה הצעד הבא" : days === 0 ? "הייתה פעולה היום" : `${days} ימים בלי פעולה — בסיכון להיעלם`;
+}
+
+function formatStuckLeadLabel(lead: Lead) {
+  const days = getDaysSinceLastActivity(lead);
+  return days >= 999 ? "מחכה לפעולה — כדאי לבדוק היום" : `תקוע ${days} ימים — צריך פולואפ`;
+}
+
+function formatLeadSourceLabel(source: string | null) {
+  if (!source) {
+    return "מקור לא הוגדר";
+  }
+
+  return source.includes("ממומן") ? "ליד ממומן — שילמת עליו, לא כדאי לתת לו להיעלם" : `מקור: ${source}`;
 }
 
 function formatNextAction(lead: Lead) {
@@ -630,14 +643,14 @@ export function LeadManager() {
                       <td className="px-5 py-4">
                         <p className="font-medium text-white">{lead.name}</p>
                         <p className="mt-1 text-zinc-300">{lead.phone || "ללא טלפון"}</p>
-                        <p className="mt-1 text-xs text-zinc-500">מקור: {lead.source || "לא הוגדר"}</p>
+                        <p className="mt-1 text-xs text-zinc-500">{formatLeadSourceLabel(lead.source)}</p>
                         <div className="mt-2 flex flex-wrap gap-2">
                           <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
-                            {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score}
+                            {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
                           </span>
                           {getDaysSinceLastActivity(lead) > 2 ? (
                             <span className="rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1 text-xs text-red-200">
-                              ⚠️ תקוע · {formatDaysSinceActivity(lead)}
+                              ⚠️ {formatStuckLeadLabel(lead)}
                             </span>
                           ) : null}
                         </div>
@@ -649,7 +662,7 @@ export function LeadManager() {
                         </span>
                         <p className="mt-2 text-xs text-zinc-500">{lead.deal_probability}% הסתברות</p>
                         <p className={getDaysSinceLastActivity(lead) > 2 ? "mt-1 text-xs text-red-200" : "mt-1 text-xs text-zinc-500"}>
-                          קשר אחרון: {formatDaysSinceActivity(lead)}
+                          למה לטפל היום: {formatDaysSinceActivity(lead)}
                         </p>
                       </td>
                       <td className="px-5 py-4">
@@ -771,7 +784,7 @@ export function LeadManager() {
                       <p className="mt-1 text-sm text-zinc-400">{lead.phone || "ללא טלפון"}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
-                          {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score}
+                          {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
                         </span>
                         <span
                           className={`rounded-full border px-2.5 py-1 text-xs ${
@@ -780,8 +793,7 @@ export function LeadManager() {
                               : "border-white/10 bg-white/5 text-zinc-400"
                           }`}
                         >
-                          {getDaysSinceLastActivity(lead) > 2 ? "⚠️ תקוע · " : ""}
-                          {formatDaysSinceActivity(lead)}
+                          {getDaysSinceLastActivity(lead) > 2 ? `⚠️ ${formatStuckLeadLabel(lead)}` : formatDaysSinceActivity(lead)}
                         </span>
                       </div>
                     </div>
