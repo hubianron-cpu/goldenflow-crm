@@ -468,7 +468,6 @@ async function activateSubscription(
     plan_name: "monthly",
     status: "active" as const,
     trial_end_at: null,
-    trial_start_at: null,
     updated_at: nowIso,
     upgraded_at: existingSubscription?.upgraded_at || nowIso,
     user_id: userId,
