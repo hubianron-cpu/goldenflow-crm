@@ -467,7 +467,6 @@ async function activateSubscription(
     grow_transaction_code: details.transactionCode || null,
     plan_name: "monthly",
     status: "active" as const,
-    trial_end_at: null,
     updated_at: nowIso,
     upgraded_at: existingSubscription?.upgraded_at || nowIso,
     user_id: userId,
