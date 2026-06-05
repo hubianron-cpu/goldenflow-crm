@@ -44,6 +44,61 @@ const emptyForm: RoiForm = {
   sales_count: "0",
 };
 
+const roiFormExamples: Array<{ description: string; form: Omit<RoiForm, "notes">; label: string }> = [
+  {
+    description: "תוכנה שעוזרת ליצור תוכן ולידים",
+    form: {
+      average_sale_value: "150",
+      category: "תוכנה",
+      leads_count: "80",
+      monthly_cost: "60",
+      name: "Canva Pro",
+      result_type: "לידים",
+      sales_count: "0",
+    },
+    label: "Canva Pro",
+  },
+  {
+    description: "עלות עובד מול מכירות חודשיות",
+    form: {
+      average_sale_value: "2000",
+      category: "עובדים",
+      leads_count: "13",
+      monthly_cost: "10000",
+      name: "עובד מכירות",
+      result_type: "מכירות",
+      sales_count: "13",
+    },
+    label: "עובד מכירות",
+  },
+  {
+    description: "כלי שחוסך זמן עבודה ידני",
+    form: {
+      average_sale_value: "120",
+      category: "אוטומציה",
+      leads_count: "12",
+      monthly_cost: "97",
+      name: "אוטומציה לוואטסאפ",
+      result_type: "שעות שנחסכו",
+      sales_count: "0",
+    },
+    label: "אוטומציה לוואטסאפ",
+  },
+  {
+    description: "קמפיין שמייצר פגישות וסגירות",
+    form: {
+      average_sale_value: "500",
+      category: "פרסום",
+      leads_count: "20",
+      monthly_cost: "1500",
+      name: "פרסום לפגישות",
+      result_type: "פגישות שנקבעו",
+      sales_count: "5",
+    },
+    label: "פרסום לפגישות",
+  },
+];
+
 function formatMoney(value: number) {
   const safeValue = Number.isFinite(value) ? value : 0;
   const absoluteValue = Math.abs(safeValue);
@@ -146,34 +201,38 @@ function getRecommendation(
   conversionsCount: number,
 ) {
   if (monthlyCost === 0) {
-    return "לא הוזנה עלות חודשית, לכן אי אפשר לחשב ROI אמיתי.";
+    return "חסרה עלות חודשית, לכן אי אפשר לחשב החלטה אמינה.";
   }
 
-  if (resultQuantity >= 1000 && conversionsCount > 0 && conversionRate !== null && conversionRate < 1) {
-    return "יש הרבה תוצאות אבל מעט המרות - הבעיה כנראה לא בכמות אלא באיכות או בסגירה.";
-  }
-
-  if (roiPercentage !== null && roiPercentage > 100) {
-    return "זה אחד הכלים המשתלמים בעסק כרגע - שווה לבדוק אם אפשר להגדיל שימוש או השקעה.";
-  }
-
-  if (roiPercentage !== null && roiPercentage > 0 && conversionRate !== null && conversionRate < 2) {
-    return "הכלי מחזיר את עצמו, אבל אחוז ההמרה נמוך - כדאי לשפר פולואפ או תהליך מכירה.";
-  }
-
-  if (roiPercentage !== null && roiPercentage >= -10 && roiPercentage <= 50) {
-    return "הכלי קרוב לאיזון - כדאי לבדוק אם אפשר להוריד עלות או לשפר שימוש.";
+  if (resultQuantity === 0) {
+    return "חסרה כמות תוצאות, לכן עדיין אי אפשר להבין מה ההוצאה יצרה.";
   }
 
   if (roiPercentage !== null && roiPercentage < -10) {
     return "לפי הנתונים כרגע, ההוצאה לא מחזירה את עצמה - כדאי לבדוק אם להפסיק, לשפר או למדוד מחדש.";
   }
 
+  if (roiPercentage !== null && roiPercentage > 100) {
+    return "זה אחד הכלים המשתלמים בעסק כרגע - שווה לבדוק אם אפשר להגדיל שימוש או השקעה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage > 0 && conversionRate !== null && conversionRate < 5) {
+    return "הכלי מחזיר את עצמו, אבל אחוז ההמרה נמוך - כדאי לשפר פולואפ או תהליך מכירה.";
+  }
+
+  if (resultQuantity >= 20 && conversionsCount <= 2) {
+    return "יש הרבה תוצאות אבל מעט המרות - הבעיה כנראה לא בכמות אלא באיכות או בסגירה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage >= -10 && roiPercentage <= 50) {
+    return "הכלי קרוב לאיזון - כדאי לבדוק אם אפשר להוריד עלות או לשפר שימוש.";
+  }
+
   if (estimatedRevenue > 0) {
     return "ההוצאה הזו מחזירה את עצמה.";
   }
 
-  return "ההוצאה כרגע לא מחזירה את עצמה לפי הנתונים שהוזנו.";
+  return "עדיין אין מספיק נתונים כדי לקבל החלטה אמינה.";
 }
 
 function shouldUseConversionsForReturn(resultType: string) {
@@ -349,12 +408,22 @@ export function RoiCenter() {
     setEditingId("");
   }
 
+  function applyExample(example: (typeof roiFormExamples)[number]) {
+    setError("");
+    setSuccess("הדוגמה נטענה לטופס - אפשר לערוך ולשמור.");
+    setForm((current) => ({
+      ...current,
+      ...example.form,
+    }));
+  }
+
   const visibleCategoryOptions = categoryOptions.includes(form.category) || !form.category
     ? categoryOptions
     : [form.category, ...categoryOptions];
   const visibleResultTypeOptions = resultTypeOptions.includes(form.result_type) || !form.result_type
     ? resultTypeOptions
     : [form.result_type, ...resultTypeOptions];
+  const shouldShowConversionsField = shouldUseConversionsForReturn(form.result_type || "לידים");
 
   function submitTool() {
     setError("");
@@ -490,13 +559,42 @@ export function RoiCenter() {
             ) : null}
           </div>
 
+          <div className="mt-5 rounded-2xl border border-gold/15 bg-gold/5 p-4 text-sm leading-6 text-zinc-300">
+            <p className="font-black text-gold-soft">איך זה עובד?</p>
+            <p className="mt-2">
+              המערכת בודקת האם הוצאה בעסק באמת מחזירה את עצמה. בחר מה ההוצאה יצרה, כמה היא יצרה, וכמה כל תוצאה שווה לך.
+            </p>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div>
+              <p className="font-black text-gold-soft">דוגמאות מהירות</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">
+                בחר דוגמה כדי לראות איך למלא את הנתונים. אפשר לערוך לפני שמירה.
+              </p>
+            </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {roiFormExamples.map((example) => (
+                <button
+                  className="rounded-2xl border border-gold/15 bg-white/[0.03] px-3 py-3 text-right transition duration-200 hover:-translate-y-0.5 hover:border-gold/35 hover:bg-gold/10 active:scale-[0.98]"
+                  key={example.label}
+                  onClick={() => applyExample(example)}
+                  type="button"
+                >
+                  <span className="block text-sm font-black text-white">{example.label}</span>
+                  <span className="mt-1 block text-xs leading-5 text-zinc-500">{example.description}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="mt-5 grid gap-4">
             <label className="text-sm font-bold text-zinc-300">
               שם ההוצאה / הכלי
               <input
                 className="field mt-2"
                 onChange={(event) => updateField("name", event.target.value)}
-                placeholder="Canva Pro, עובד מכירות, פרסום לפגישות, אוטומציה לוואטסאפ"
+                placeholder="לדוגמה: Canva Pro, עובד מכירות, פרסום, אוטומציה"
                 value={form.name}
               />
             </label>
@@ -511,7 +609,7 @@ export function RoiCenter() {
               </select>
             </label>
             <label className="text-sm font-bold text-zinc-300">
-              סוג תוצאה
+              מה ההוצאה הזאת יצרה?
               <select className="field mt-2" onChange={(event) => updateField("result_type", event.target.value)} value={form.result_type || "לידים"}>
                 {visibleResultTypeOptions.map((resultType) => (
                   <option key={resultType} value={resultType}>
@@ -520,27 +618,29 @@ export function RoiCenter() {
                 ))}
               </select>
               <span className="mt-2 block text-xs leading-5 text-zinc-500">
-                בחר מה ההוצאה הזאת באמת יצרה בעסק - לידים, מכירות, זמן שנחסך, משימות שבוצעו או כל תוצאה מדידה אחרת.
+                לדוגמה: לידים, מכירות, שעות שנחסכו, פגישות שנקבעו או כסף שנחסך.
               </span>
             </label>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm font-bold text-zinc-300">
-                עלות חודשית
-                <input className="field mt-2" min="0" onChange={(event) => updateField("monthly_cost", event.target.value)} type="number" value={form.monthly_cost} />
+                כמה זה עולה לך בחודש?
+                <input className="field mt-2" min="0" onChange={(event) => updateField("monthly_cost", event.target.value)} placeholder="לדוגמה: 97" type="number" value={form.monthly_cost} />
               </label>
               <label className="text-sm font-bold text-zinc-300">
-                כמות תוצאות
-                <input className="field mt-2" min="0" onChange={(event) => updateField("leads_count", event.target.value)} placeholder="20" type="number" value={form.leads_count} />
+                כמה זה יצר החודש?
+                <input className="field mt-2" min="0" onChange={(event) => updateField("leads_count", event.target.value)} placeholder="לדוגמה: 48" type="number" value={form.leads_count} />
               </label>
+              {shouldShowConversionsField ? (
+                <label className="text-sm font-bold text-zinc-300">
+                  כמות המרות / מכירות
+                  <input className="field mt-2" min="0" onChange={(event) => updateField("sales_count", event.target.value)} type="number" value={form.sales_count} />
+                </label>
+              ) : null}
               <label className="text-sm font-bold text-zinc-300">
-                כמות המרות / מכירות
-                <input className="field mt-2" min="0" onChange={(event) => updateField("sales_count", event.target.value)} type="number" value={form.sales_count} />
-              </label>
-              <label className="text-sm font-bold text-zinc-300">
-                שווי תוצאה ממוצעת
-                <input className="field mt-2" min="0" onChange={(event) => updateField("average_sale_value", event.target.value)} placeholder="150" type="number" value={form.average_sale_value} />
+                כמה כל תוצאה שווה לך?
+                <input className="field mt-2" min="0" onChange={(event) => updateField("average_sale_value", event.target.value)} placeholder="לדוגמה: 150" type="number" value={form.average_sale_value} />
                 <span className="mt-2 block text-xs leading-5 text-zinc-500">
-                  לדוגמה: אם זו שעה שנחסכה, הזן כמה שווה לך שעה. אם זה ליד, הזן כמה שווה לך ליד או לקוח בממוצע.
+                  לדוגמה: אם ליד שווה לך בערך 150 ₪ — הזן 150. אם שעה שנחסכה שווה לך 100 ₪ — הזן 100.
                 </span>
               </label>
             </div>
