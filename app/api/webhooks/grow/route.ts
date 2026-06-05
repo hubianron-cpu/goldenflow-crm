@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 
@@ -45,6 +46,44 @@ function logGrowEventError(label: string, error: SupabaseErrorLike, context: Rec
 
 function getGrowWebhookKey() {
   return process.env.GROW_WEBHOOK_KEY?.trim() || "";
+}
+
+function safeSecretEquals(incoming: string, expected: string) {
+  if (!incoming || !expected) {
+    return false;
+  }
+
+  const incomingBuffer = Buffer.from(incoming);
+  const expectedBuffer = Buffer.from(expected);
+
+  if (incomingBuffer.length !== expectedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(incomingBuffer, expectedBuffer);
+}
+
+function getGrowWebhookAuthSource(request: Request, payload: WebhookPayload, expectedWebhookKey: string) {
+  const url = new URL(request.url);
+  const candidates = [
+    { source: "body.webhookKey", value: getField(payload, ["webhookKey"]) },
+    { source: "body.webhook_key", value: getField(payload, ["webhook_key"]) },
+    { source: "query.key", value: cleanText(url.searchParams.get("key")) },
+    { source: "query.webhookKey", value: cleanText(url.searchParams.get("webhookKey")) },
+    { source: "header.x-webhook-key", value: cleanText(request.headers.get("x-webhook-key")) },
+  ];
+
+  for (const candidate of candidates) {
+    if (candidate.value) {
+      console.info("GROW_WEBHOOK_AUTH_SOURCE_DETECTED", { source: candidate.source });
+    }
+
+    if (safeSecretEquals(candidate.value, expectedWebhookKey)) {
+      return { isValid: true, source: candidate.source };
+    }
+  }
+
+  return { isValid: false, source: null };
 }
 
 function getWebhookAdminClient() {
@@ -489,14 +528,15 @@ export async function POST(request: Request) {
     return jsonResponse({ error: "Invalid webhook payload" }, 400);
   }
 
-  const incomingWebhookKey = getField(payload, ["webhookKey", "webhook_key"]);
+  const webhookAuth = getGrowWebhookAuthSource(request, payload, expectedWebhookKey);
 
-  if (!incomingWebhookKey || incomingWebhookKey !== expectedWebhookKey) {
+  if (!webhookAuth.isValid) {
+    console.info("GROW_WEBHOOK_AUTH_FAILED");
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
   console.info("Grow webhook verified");
-  console.info("GROW_WEBHOOK_VERIFIED");
+  console.info("GROW_WEBHOOK_VERIFIED", { source: webhookAuth.source });
 
   const adminClientResult = getWebhookAdminClient();
   console.info("GROW_SUPABASE_ADMIN_CLIENT_READY", {
