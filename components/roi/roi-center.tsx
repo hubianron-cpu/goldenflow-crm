@@ -17,6 +17,7 @@ type RoiForm = {
 };
 
 type RoiMetrics = {
+  bottomLine: string;
   conversionRate: number | null;
   costPerLead: number | null;
   costPerSale: number | null;
@@ -239,6 +240,60 @@ function shouldUseConversionsForReturn(resultType: string) {
   return ["לידים", "פגישות שנקבעו"].includes(resultType.trim());
 }
 
+function getResultQuantityLabel(resultType: string) {
+  switch (resultType.trim()) {
+    case "לידים":
+      return "כמה לידים זה יצר החודש?";
+    case "שעות שנחסכו":
+      return "כמה שעות נחסכו החודש?";
+    case "מכירות":
+      return "כמה מכירות זה יצר החודש?";
+    case "פגישות שנקבעו":
+      return "כמה פגישות נקבעו החודש?";
+    case "לקוחות שטופלו":
+      return "כמה לקוחות טופלו החודש?";
+    case "משימות שבוצעו":
+      return "כמה משימות בוצעו החודש?";
+    case "כסף שנחסך":
+      return "כמה כסף נחסך החודש?";
+    default:
+      return "כמה זה יצר החודש?";
+  }
+}
+
+function formatReturnMultiple(value: number) {
+  if (!Number.isFinite(value)) {
+    return "-";
+  }
+
+  const rounded = value >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function getBottomLine(monthlyCost: number, estimatedRevenue: number, roiPercentage: number | null, resultQuantity: number) {
+  if (monthlyCost === 0) {
+    return "חסרה עלות חודשית כדי לחשב מסקנה אמינה.";
+  }
+
+  if (estimatedRevenue === 0 || resultQuantity === 0) {
+    return "עדיין חסרים נתונים כדי להבין אם ההוצאה מחזירה את עצמה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage < 0) {
+    return "כרגע ההוצאה עדיין לא מחזירה את עצמה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage < 50) {
+    return "ההוצאה קרובה לאיזון, אבל עדיין לא מספיק חזקה.";
+  }
+
+  if (roiPercentage !== null && roiPercentage < 100) {
+    return "ההוצאה מחזירה את עצמה ומתחילה לייצר רווח.";
+  }
+
+  return `ההוצאה הזו החזירה בערך פי ${formatReturnMultiple(estimatedRevenue / monthlyCost)} מהעלות שלה.`;
+}
+
 function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "leads_count" | "monthly_cost" | "result_type" | "sales_count">): RoiMetrics {
   const monthlyCost = Number(tool.monthly_cost) || 0;
   const leadsCount = Number(tool.leads_count) || 0;
@@ -254,9 +309,11 @@ function getMetrics(tool: Pick<RoiTool, "average_sale_value" | "category" | "lea
   const paybackDays = monthlyCost > 0 && estimatedRevenue > 0 ? Math.round((monthlyCost / estimatedRevenue) * 30) : null;
   const paybackLabel = getPaybackLabel(monthlyCost, estimatedRevenue, netProfit, paybackDays);
   const recommendation = getRecommendation(monthlyCost, estimatedRevenue, roiPercentage, conversionRate, leadsCount, salesCount);
+  const bottomLine = getBottomLine(monthlyCost, estimatedRevenue, roiPercentage, leadsCount);
   const status = getStatus(roiPercentage);
 
   return {
+    bottomLine,
     conversionRate,
     costPerLead,
     costPerSale,
@@ -627,7 +684,7 @@ export function RoiCenter() {
                 <input className="field mt-2" min="0" onChange={(event) => updateField("monthly_cost", event.target.value)} placeholder="לדוגמה: 97" type="number" value={form.monthly_cost} />
               </label>
               <label className="text-sm font-bold text-zinc-300">
-                כמה זה יצר החודש?
+                {getResultQuantityLabel(form.result_type || "אחר")}
                 <input className="field mt-2" min="0" onChange={(event) => updateField("leads_count", event.target.value)} placeholder="לדוגמה: 48" type="number" value={form.leads_count} />
               </label>
               {shouldShowConversionsField ? (
@@ -639,6 +696,9 @@ export function RoiCenter() {
               <label className="text-sm font-bold text-zinc-300">
                 כמה כל תוצאה שווה לך?
                 <input className="field mt-2" min="0" onChange={(event) => updateField("average_sale_value", event.target.value)} placeholder="לדוגמה: 150" type="number" value={form.average_sale_value} />
+                <span className="mt-2 block text-xs leading-5 text-zinc-500">
+                  הזן הערכה בערך — לא חייב להיות מספר מדויק.
+                </span>
                 <span className="mt-2 block text-xs leading-5 text-zinc-500">
                   לדוגמה: אם ליד שווה לך בערך 150 ₪ — הזן 150. אם שעה שנחסכה שווה לך 100 ₪ — הזן 100.
                 </span>
@@ -706,6 +766,11 @@ export function RoiCenter() {
                       <div className="mt-4 rounded-xl border border-gold/15 bg-gold/[0.06] p-3">
                         <p className="text-xs font-black text-gold-soft">המלצת מערכת</p>
                         <p className="mt-2 text-sm leading-6 text-zinc-300">{metrics.recommendation}</p>
+                      </div>
+
+                      <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                        <p className="text-xs font-black text-gold-soft">השורה התחתונה</p>
+                        <p className="mt-2 text-sm leading-6 text-zinc-300">{metrics.bottomLine}</p>
                       </div>
 
                       {tool.notes ? <p className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-zinc-400">{tool.notes}</p> : null}
