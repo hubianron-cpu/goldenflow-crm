@@ -1,9 +1,10 @@
 "use client";
 
+import { Fragment } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, KanbanSquare, LayoutDashboard, ListTodo, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, ExternalLink, KanbanSquare, LayoutDashboard, ListTodo, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -67,11 +68,31 @@ function NavLink({
   );
 }
 
+function ExternalNavLink() {
+  return (
+    <a
+      className="group relative flex min-h-12 items-center gap-3 overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.025] px-4 py-3 text-sm font-bold text-zinc-400 transition duration-200 hover:-translate-y-0.5 hover:border-gold/30 hover:bg-gold/10 hover:text-white hover:shadow-[0_0_26px_rgba(201,162,39,0.10)] active:scale-[0.98]"
+      href="https://diagnostic.goldenflowcrm.com"
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl border border-white/10 bg-black/25 text-zinc-500 transition duration-200 group-hover:border-gold/30 group-hover:text-gold-soft">
+        <ExternalLink className="h-4 w-4" />
+      </span>
+      <span className="min-w-0 flex-1">Dealbreaker AI Coach</span>
+      <span className="text-xs text-gold-soft/80">↗</span>
+    </a>
+  );
+}
+
 export function NavigationLinks({ badges = {} }: { badges?: NavigationBadges }) {
   return (
     <nav className="space-y-3">
       {navigation.map((item) => (
-        <NavLink badge={badges[item.href as keyof NavigationBadges]} key={item.href} {...item} />
+        <Fragment key={item.href}>
+          <NavLink badge={badges[item.href as keyof NavigationBadges]} {...item} />
+          {item.href === "/pipeline" ? <ExternalNavLink /> : null}
+        </Fragment>
       ))}
     </nav>
   );
