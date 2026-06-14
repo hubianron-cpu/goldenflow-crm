@@ -1,5 +1,6 @@
 import { BadgeDollarSign, Crown, LogOut } from "lucide-react";
 import { NavigationLinks } from "@/components/nav-link";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { signOut } from "@/lib/actions";
 
 export function AppShell({
@@ -21,6 +22,10 @@ export function AppShell({
         <aside className="relative h-fit w-full max-w-full overflow-hidden rounded-[28px] border border-gold/15 bg-black/55 p-5 shadow-[0_28px_90px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl lg:sticky lg:top-6 lg:min-h-[calc(100vh-3rem)]">
           <div className="pointer-events-none absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-gold/55 to-transparent" />
           <div className="pointer-events-none absolute -right-12 top-8 h-40 w-40 rounded-full bg-gold/10 blur-3xl" />
+
+          <div className="relative mb-3 flex justify-end">
+            <ThemeToggle />
+          </div>
 
           <div className="relative mb-6 overflow-visible rounded-[24px] border border-gold/25 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.28),rgba(12,10,5,0.95)_52%,rgba(4,4,4,0.98))] p-4 text-white shadow-[0_22px_60px_rgba(0,0,0,0.32),0_0_38px_rgba(201,162,39,0.14)]">
             <div className="absolute inset-x-5 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />

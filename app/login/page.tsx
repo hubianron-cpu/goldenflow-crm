@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertTriangle, LogIn } from "lucide-react";
 import { StatusMessage } from "@/components/status-message";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { hasSupabaseEnv } from "@/lib/env";
 import { signIn } from "@/lib/actions";
 
@@ -42,6 +43,9 @@ export default async function LoginPage({
         </section>
 
         <section className="panel p-6 lg:p-8">
+          <div className="mb-4 flex justify-end">
+            <ThemeToggle />
+          </div>
           <h2 className="text-center text-2xl font-black">כניסה למערכת</h2>
           <p className="mt-2 text-center text-sm text-zinc-400">התחברו כדי לנהל לידים, המשימות שלי ומסלול המכירה.</p>
 
