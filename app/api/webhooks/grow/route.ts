@@ -16,8 +16,6 @@ type SupabaseErrorLike = {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const SUCCESS_STATUS_CODES = new Set(["0", "00", "000", "1", "200"]);
-const SUCCESS_WORDS = ["success", "approved", "paid", "complete", "completed", "ok", "מאושר", "שולם"];
 const FAILURE_WORDS = ["fail", "failed", "failure", "declined", "denied", "error", "cancel", "cancelled", "rejected", "refused", "סורב", "נכשל"];
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
@@ -273,15 +271,15 @@ function getWebhookDetails(payload: WebhookPayload) {
   const statusCode = getField(payload, ["statusCode"]);
   const errorMessage = getField(payload, ["error_message"]);
   const combinedStatusText = `${status} ${statusCode} ${errorMessage}`.toLowerCase();
+  const normalizedStatus = status.toLowerCase();
   const hasFailureSignal = Boolean(errorMessage) || FAILURE_WORDS.some((word) => combinedStatusText.includes(word));
-  const hasSuccessSignal = SUCCESS_STATUS_CODES.has(statusCode) || SUCCESS_WORDS.some((word) => combinedStatusText.includes(word));
-  const looksLikePaidTransaction = Boolean(transactionCode && (paymentSum !== null || directDebitId));
+  const hasSuccessSignal = normalizedStatus === "success";
 
   return {
     directDebitId,
     errorMessage,
     isFailedPayment: hasFailureSignal,
-    isSuccessfulPayment: !hasFailureSignal && (hasSuccessSignal || looksLikePaidTransaction),
+    isSuccessfulPayment: !hasFailureSignal && hasSuccessSignal,
     payerEmail,
     paymentDate,
     paymentSum,
