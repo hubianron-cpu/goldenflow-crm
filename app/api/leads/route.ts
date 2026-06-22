@@ -3,17 +3,21 @@ import { revalidatePath } from "next/cache";
 import { hasSupabaseEnv } from "@/lib/env";
 import {
   isLeadStatus,
+  LEAD_STATUSES,
   isNextActionType,
   normalizeLeadStatus,
   isPriority,
+  isFinalLeadStatus,
   shouldMoveToReactivation,
   type Lead,
   type LeadStatus,
   type NextActionType,
   type Priority,
 } from "@/lib/leads";
+import { isAdminEmail } from "@/lib/admin";
 import { checkRateLimit, getClientIp, getRateLimitResponseHeaders } from "@/lib/security/rate-limit";
 import { requireSubscriptionAccess } from "@/lib/subscription-guard";
+import { getSubscriptionAccess, type SubscriptionAccess } from "@/lib/subscriptions";
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
@@ -23,8 +27,11 @@ const PUBLIC_LEAD_RATE_LIMIT = {
   limit: 20,
   windowMs: 10 * 60 * 1000,
 };
-const PUBLIC_LEAD_ERROR = "לא הצלחנו לשלוח את הפרטים. נסו שוב מאוחר יותר.";
+const PUBLIC_LEAD_ERROR = "לא ניתן לשלוח את הפרטים כרגע. אפשר לנסות שוב מאוחר יותר.";
+const TRIAL_ACTIVE_LEAD_LIMIT = 30;
+const UPGRADE_URL = "https://meshulam.co.il/s/e89b2737-e347-bbf1-34ce-ca6ba2b0fb94";
 type LeadWriteClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
+type LeadDataClient = Pick<LeadWriteClient, "from">;
 
 function jsonError(message: string, status: number, meta?: Record<string, unknown>) {
   return NextResponse.json({ error: message, ...meta }, { status });
@@ -60,6 +67,87 @@ function getSupabaseErrorMeta(error: {
     hint: error.hint ?? null,
     message: error.message ?? null,
   };
+}
+
+function getTrialLeadLimitResponse() {
+  return NextResponse.json(
+    {
+      error: "TRIAL_ACTIVE_LEAD_LIMIT_REACHED",
+      limit: TRIAL_ACTIVE_LEAD_LIMIT,
+      message:
+        "הגעת למגבלת 30 הלידים הפעילים בתקופת הניסיון.\n\nכדי להוסיף לידים נוספים ולהמשיך לנהל את העסק ללא הגבלה, יש לשדרג למנוי פעיל.",
+      upgradeUrl: UPGRADE_URL,
+    },
+    { status: 403 },
+  );
+}
+
+async function getSubscriptionAccessForUser(supabase: LeadDataClient, userId: string) {
+  const { data, error } = await supabase
+    .from("user_subscriptions")
+    .select("status,trial_end_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    logSupabaseError("lead_limit.subscription_select", error);
+  }
+
+  return getSubscriptionAccess(data);
+}
+
+async function getIsAdminOwner(admin: LeadWriteClient, userId: string) {
+  const { data, error } = await admin.auth.admin.getUserById(userId);
+
+  if (error) {
+    console.error("LEAD_LIMIT_ADMIN_LOOKUP_FAILED", {
+      message: error.message ?? null,
+      status: error.status ?? null,
+    });
+  }
+
+  return isAdminEmail(data.user?.email);
+}
+
+function shouldApplyTrialLeadLimit(access: SubscriptionAccess, isAdmin: boolean) {
+  return !isAdmin && access.hasAccess && access.isTrial && !access.isActive;
+}
+
+async function countActiveLeads(supabase: LeadDataClient, userId: string) {
+  const { data, error } = await supabase.from("leads").select("status").eq("user_id", userId);
+
+  if (error) {
+    logSupabaseError("lead_limit.leads_select", error);
+    return { error };
+  }
+
+  return {
+    count: (data ?? []).filter((lead) => !isFinalLeadStatus(lead.status)).length,
+  };
+}
+
+async function checkTrialActiveLeadLimit({
+  access,
+  isAdmin,
+  supabase,
+  userId,
+}: {
+  access: SubscriptionAccess;
+  isAdmin: boolean;
+  supabase: LeadDataClient;
+  userId: string;
+}) {
+  if (!shouldApplyTrialLeadLimit(access, isAdmin)) {
+    return { blocked: false };
+  }
+
+  const activeLeads = await countActiveLeads(supabase, userId);
+
+  if ("error" in activeLeads) {
+    return { blocked: false, error: activeLeads.error };
+  }
+
+  return { blocked: activeLeads.count >= TRIAL_ACTIVE_LEAD_LIMIT };
 }
 
 async function getContext() {
@@ -117,7 +205,13 @@ async function getOptionalWriteContext() {
       return { error: jsonError(subscription.error, subscription.status) };
     }
 
-    return { source: "session" as const, supabase, userId: user.id };
+    return {
+      access: await getSubscriptionAccessForUser(supabase as unknown as LeadDataClient, user.id),
+      isAdmin: isAdminEmail(user.email),
+      source: "session" as const,
+      supabase,
+      userId: user.id,
+    };
   }
 
   const admin = getSupabaseAdminClient();
@@ -129,7 +223,13 @@ async function getOptionalWriteContext() {
     };
   }
 
-  return { source: "public" as const, supabase: admin, userId: defaultOwnerId };
+  return {
+    access: await getSubscriptionAccessForUser(admin, defaultOwnerId),
+    isAdmin: await getIsAdminOwner(admin, defaultOwnerId),
+    source: "public" as const,
+    supabase: admin,
+    userId: defaultOwnerId,
+  };
 }
 
 function cleanOptional(value: unknown) {
@@ -547,6 +647,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const leadStatus = isFinalLeadStatus(lead.status) ? LEAD_STATUSES[0].value : lead.status;
+  const limitCheck = await checkTrialActiveLeadLimit({
+    access: context.access,
+    isAdmin: context.isAdmin,
+    supabase: writeSupabase,
+    userId: ownerId,
+  });
+
+  if (limitCheck.blocked) {
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 403) : getTrialLeadLimitResponse();
+  }
+
+  if (limitCheck.error) {
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError("לא ניתן לבדוק את מגבלת הלידים כרגע. נסו שוב מאוחר יותר.", 500);
+  }
+
   const { data, error } = await writeSupabase
     .from("leads")
     .insert({
@@ -555,7 +673,7 @@ export async function POST(request: Request) {
       full_name: leadName,
       next_action_date: now,
       notes: lead.notes,
-      status: lead.status satisfies LeadStatus,
+      status: leadStatus satisfies LeadStatus,
       next_action_type: "call" satisfies NextActionType,
       phone,
       priority: lead.priority satisfies Priority,

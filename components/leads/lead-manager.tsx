@@ -125,6 +125,7 @@ function getUrgencyTime(lead: Lead) {
 
 export function LeadManager() {
   const [error, setError] = useState("");
+  const [upgradeUrl, setUpgradeUrl] = useState("");
   const [success, setSuccess] = useState("");
   const [form, setForm] = useState(initialForm);
   const [isPending, startTransition] = useTransition();
@@ -241,6 +242,7 @@ export function LeadManager() {
 
   function patchLead(body: Record<string, unknown>, message: string) {
     setError("");
+    setUpgradeUrl("");
     setSuccess("");
 
     startTransition(async () => {
@@ -262,6 +264,10 @@ export function LeadManager() {
   }
 
   function getApiErrorMessage(payload: Record<string, unknown>, fallback: string) {
+    if (payload.error === "TRIAL_ACTIVE_LEAD_LIMIT_REACHED" && typeof payload.message === "string") {
+      return payload.message;
+    }
+
     return [
       typeof payload.error === "string" ? payload.error : "",
       typeof payload.message === "string" ? payload.message : "",
@@ -276,6 +282,7 @@ export function LeadManager() {
   function handleCreateLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
+    setUpgradeUrl("");
     setSuccess("");
 
     const validationError = validateForm();
@@ -301,6 +308,7 @@ export function LeadManager() {
       const payload = await response.json().catch(() => ({}));
 
       if (!response.ok) {
+        setUpgradeUrl(typeof payload.upgradeUrl === "string" ? payload.upgradeUrl : "");
         setError(getApiErrorMessage(payload, "לא הצלחנו לשמור את הליד. בדקו חיבור ונסו שוב."));
         return;
       }
@@ -379,6 +387,7 @@ export function LeadManager() {
 
   function deleteLead(lead: Lead) {
     setError("");
+    setUpgradeUrl("");
     setSuccess("");
 
     startTransition(async () => {
@@ -453,6 +462,11 @@ export function LeadManager() {
   return (
     <div className="space-y-6">
       <StatusMessage error={error} success={success} />
+      {error && upgradeUrl ? (
+        <a className="button-secondary w-full sm:w-auto" href={upgradeUrl} target="_blank" rel="noopener noreferrer">
+          לרכישת מנוי בצורה מאובטחת
+        </a>
+      ) : null}
 
       <section className="panel p-4 sm:p-5">
         <form onSubmit={handleCreateLead} className="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.8fr_1fr_0.8fr_auto]">
