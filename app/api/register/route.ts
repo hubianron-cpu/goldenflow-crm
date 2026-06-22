@@ -1,25 +1,17 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/env";
+import { checkRateLimit, getClientIp, getRateLimitResponseHeaders } from "@/lib/security/rate-limit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
 const TRIAL_DAYS = 14;
+const GENERIC_REGISTER_ERROR = "לא ניתן להשלים את ההרשמה כרגע. בדקו את הפרטים או נסו שוב מאוחר יותר.";
+const REGISTER_RATE_LIMIT = {
+  limit: 5,
+  windowMs: 15 * 60 * 1000,
+};
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
-}
-
-function getReadableAuthError(message: string) {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("already") || normalized.includes("registered") || normalized.includes("exists")) {
-    return "כבר קיים משתמש עם האימייל הזה. אפשר להתחבר במקום.";
-  }
-
-  if (normalized.includes("password")) {
-    return "הסיסמה קצרה מדי או לא עומדת בדרישות.";
-  }
-
-  return "לא ניתן לפתוח חשבון ניסיון כרגע.";
 }
 
 function cleanText(value: unknown) {
@@ -30,10 +22,25 @@ function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
+function isValidPhone(phone: string) {
+  return /^[0-9+\-()\s]{7,30}$/.test(phone);
+}
+
+function isTooLong(value: string, maxLength: number) {
+  return value.length > maxLength;
+}
+
 function getTrialEndDate(now: Date) {
   const trialEnd = new Date(now);
   trialEnd.setDate(trialEnd.getDate() + TRIAL_DAYS);
   return trialEnd.toISOString();
+}
+
+function getRateLimitedResponse(retryAfter: number) {
+  return NextResponse.json(
+    { error: "יותר מדי ניסיונות הרשמה. נסו שוב בעוד כמה דקות." },
+    { headers: getRateLimitResponseHeaders(retryAfter), status: 429 },
+  );
 }
 
 export async function POST(request: Request) {
@@ -41,10 +48,21 @@ export async function POST(request: Request) {
     return jsonError("חסרה הגדרת Supabase.", 503);
   }
 
+  const clientIp = getClientIp(request.headers);
+  const rateLimit = checkRateLimit({
+    key: `register:${clientIp}`,
+    limit: REGISTER_RATE_LIMIT.limit,
+    windowMs: REGISTER_RATE_LIMIT.windowMs,
+  });
+
+  if (!rateLimit.allowed) {
+    return getRateLimitedResponse(rateLimit.retryAfter);
+  }
+
   const serviceSupabase = getSupabaseAdminClient();
 
   if (!serviceSupabase) {
-    return jsonError("לא ניתן לפתוח חשבון ניסיון כרגע.", 500);
+    return jsonError(GENERIC_REGISTER_ERROR, 500);
   }
 
   const body = await request.json().catch(() => null);
@@ -54,6 +72,12 @@ export async function POST(request: Request) {
   }
 
   const record = body as Record<string, unknown>;
+  const honeypot = cleanText(record.website);
+
+  if (honeypot) {
+    return NextResponse.json({ success: true }, { status: 200 });
+  }
+
   const fullName = cleanText(record.full_name);
   const email = cleanText(record.email).toLowerCase();
   const password = typeof record.password === "string" ? record.password : "";
@@ -61,27 +85,27 @@ export async function POST(request: Request) {
   const phone = cleanText(record.phone);
   const profession = cleanText(record.profession);
 
-  if (!fullName) {
+  if (!fullName || isTooLong(fullName, 120)) {
     return jsonError("יש להזין שם מלא.", 400);
   }
 
-  if (!email || !isValidEmail(email)) {
+  if (!email || email.length > 254 || !isValidEmail(email)) {
     return jsonError("יש להזין אימייל תקין.", 400);
   }
 
-  if (password.length < 6) {
-    return jsonError("יש להזין סיסמה באורך 6 תווים לפחות.", 400);
+  if (password.length < 8 || password.length > 128) {
+    return jsonError("יש להזין סיסמה באורך 8 עד 128 תווים.", 400);
   }
 
-  if (!businessName) {
+  if (!businessName || isTooLong(businessName, 120)) {
     return jsonError("יש להזין שם עסק.", 400);
   }
 
-  if (!phone) {
-    return jsonError("יש להזין טלפון.", 400);
+  if (!phone || phone.length > 30 || !isValidPhone(phone)) {
+    return jsonError("יש להזין טלפון תקין.", 400);
   }
 
-  if (!profession) {
+  if (!profession || isTooLong(profession, 120)) {
     return jsonError("יש לבחור תחום עיסוק.", 400);
   }
 
@@ -104,7 +128,7 @@ export async function POST(request: Request) {
   });
 
   if (error || !data.user) {
-    return jsonError(getReadableAuthError(error?.message || ""), error?.status || 400);
+    return jsonError(GENERIC_REGISTER_ERROR, error?.status || 400);
   }
 
   const userId = data.user.id;
@@ -122,7 +146,7 @@ export async function POST(request: Request) {
 
   if (profileError) {
     await serviceSupabase.auth.admin.deleteUser(userId);
-    return jsonError("לא ניתן לפתוח חשבון ניסיון כרגע.", 500);
+    return jsonError(GENERIC_REGISTER_ERROR, 500);
   }
 
   const { error: subscriptionError } = await serviceSupabase
@@ -142,7 +166,7 @@ export async function POST(request: Request) {
 
   if (subscriptionError) {
     await serviceSupabase.auth.admin.deleteUser(userId);
-    return jsonError("לא ניתן לפתוח חשבון ניסיון כרגע.", 500);
+    return jsonError(GENERIC_REGISTER_ERROR, 500);
   }
 
   return NextResponse.json(

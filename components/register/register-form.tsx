@@ -21,6 +21,7 @@ const initialForm = {
   password: "",
   phone: "",
   profession: "",
+  website: "",
 };
 
 function isValidEmail(email: string) {
@@ -46,8 +47,8 @@ export function RegisterForm() {
       return "יש להזין אימייל תקין.";
     }
 
-    if (form.password.length < 6) {
-      return "יש להזין סיסמה באורך 6 תווים לפחות.";
+    if (form.password.length < 8) {
+      return "יש להזין סיסמה באורך 8 תווים לפחות.";
     }
 
     if (!form.business_name.trim()) {
@@ -86,6 +87,7 @@ export function RegisterForm() {
           password: form.password,
           phone: form.phone.trim(),
           profession: form.profession,
+          website: form.website.trim(),
         }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -117,6 +119,20 @@ export function RegisterForm() {
         />
       </label>
 
+      <label
+        aria-hidden="true"
+        className="absolute -left-[10000px] h-px w-px overflow-hidden"
+      >
+        Website
+        <input
+          autoComplete="off"
+          name="website"
+          onChange={(event) => updateField("website", event.target.value)}
+          tabIndex={-1}
+          value={form.website}
+        />
+      </label>
+
       <label className="block text-sm font-semibold text-zinc-200">
         אימייל
         <input
@@ -133,7 +149,7 @@ export function RegisterForm() {
         סיסמה
         <input
           className="field mt-2"
-          minLength={6}
+          minLength={8}
           name="password"
           onChange={(event) => updateField("password", event.target.value)}
           required

@@ -12,12 +12,18 @@ import {
   type NextActionType,
   type Priority,
 } from "@/lib/leads";
+import { checkRateLimit, getClientIp, getRateLimitResponseHeaders } from "@/lib/security/rate-limit";
 import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
 const leadSelect =
   "id, closed_at, created_at, deal_probability, last_contact_date, name:full_name, next_action_date, next_action_type, notes, phone, priority, reason_not_closed, source, status, updated_at, user_id, value";
+const PUBLIC_LEAD_RATE_LIMIT = {
+  limit: 20,
+  windowMs: 10 * 60 * 1000,
+};
+const PUBLIC_LEAD_ERROR = "לא הצלחנו לשלוח את הפרטים. נסו שוב מאוחר יותר.";
 type LeadWriteClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
 
 function jsonError(message: string, status: number, meta?: Record<string, unknown>) {
@@ -119,10 +125,7 @@ async function getOptionalWriteContext() {
 
   if (!admin || !defaultOwnerId) {
     return {
-      error: jsonError(
-        "Public lead capture is not configured. Set SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DEFAULT_OWNER_ID.",
-        503,
-      ),
+      error: jsonError(PUBLIC_LEAD_ERROR, 503),
     };
   }
 
@@ -162,6 +165,47 @@ function parseProbability(value: unknown) {
 
 function isValidPhone(value: string | null) {
   return !value || /^[0-9+\-()\s]{7,20}$/.test(value);
+}
+
+function isValidPublicPhone(value: string | null) {
+  return !value || /^[0-9+\-()\s]{7,30}$/.test(value);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isTooLong(value: string | null, maxLength: number) {
+  return Boolean(value && value.length > maxLength);
+}
+
+function getPublicLeadRateLimitedResponse(retryAfter: number) {
+  return NextResponse.json(
+    { error: "יותר מדי ניסיונות שליחה. נסו שוב בעוד כמה דקות." },
+    { headers: getRateLimitResponseHeaders(retryAfter), status: 429 },
+  );
+}
+
+function validatePublicLeadRequest(record: Record<string, unknown>, lead: ReturnType<typeof normalizeLeadPayload>) {
+  const email = typeof record.email === "string" ? record.email.trim() : "";
+
+  if (!lead.name || isTooLong(lead.name, 100)) {
+    return "Lead name is invalid.";
+  }
+
+  if (!lead.phone || lead.phone.length > 30 || !isValidPublicPhone(lead.phone)) {
+    return "Phone number is invalid.";
+  }
+
+  if (email && (email.length > 254 || !isValidEmail(email))) {
+    return "Email is invalid.";
+  }
+
+  if (isTooLong(lead.source, 120) || isTooLong(lead.notes, 1000) || isTooLong(lead.reason_not_closed, 1000)) {
+    return "Lead details are invalid.";
+  }
+
+  return "";
 }
 
 function normalizeLeadPayload(body: Record<string, unknown>) {
@@ -407,22 +451,47 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
   if (!body || typeof body !== "object") {
-    return jsonError("Invalid request body.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Invalid request body.", 400);
   }
 
-  const lead = normalizeLeadPayload(body as Record<string, unknown>);
+  const record = body as Record<string, unknown>;
+
+  if (context.source === "public") {
+    const clientIp = getClientIp(request.headers);
+    const rateLimit = checkRateLimit({
+      key: `public-lead:${clientIp}`,
+      limit: PUBLIC_LEAD_RATE_LIMIT.limit,
+      windowMs: PUBLIC_LEAD_RATE_LIMIT.windowMs,
+    });
+
+    if (!rateLimit.allowed) {
+      return getPublicLeadRateLimitedResponse(rateLimit.retryAfter);
+    }
+
+    if (cleanOptional(record.website)) {
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
+  }
+
+  const lead = normalizeLeadPayload(record);
+  const publicValidationError = context.source === "public" ? validatePublicLeadRequest(record, lead) : "";
+
+  if (publicValidationError) {
+    return jsonError(PUBLIC_LEAD_ERROR, 400);
+  }
+
   const isQuickWhatsapp = lead.source === "whatsapp";
 
   if (!lead.name && !isQuickWhatsapp) {
-    return jsonError("Lead name is required.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Lead name is required.", 400);
   }
 
   if (!lead.phone) {
-    return jsonError("Phone number is required.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Phone number is required.", 400);
   }
 
   if (!isValidPhone(lead.phone)) {
-    return jsonError("Phone number is invalid.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Phone number is invalid.", 400);
   }
 
   const now = new Date().toISOString();
@@ -439,7 +508,9 @@ export async function POST(request: Request) {
 
   if (duplicateCheckError) {
     logSupabaseError("leads.duplicate_check", duplicateCheckError);
-    return jsonError(getSupabaseErrorMessage(duplicateCheckError), 500, getSupabaseErrorMeta(duplicateCheckError));
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError(getSupabaseErrorMessage(duplicateCheckError), 500, getSupabaseErrorMeta(duplicateCheckError));
   }
 
   if (existingLead) {
@@ -459,7 +530,9 @@ export async function POST(request: Request) {
 
     if (error) {
       logSupabaseError("leads.duplicate_update", error);
-      return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
+      return context.source === "public"
+        ? jsonError(PUBLIC_LEAD_ERROR, 500)
+        : jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
     }
 
     const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId);
@@ -496,7 +569,9 @@ export async function POST(request: Request) {
 
   if (error) {
     logSupabaseError("leads.insert", error);
-    return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
   }
 
   const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId, { newLead: true });
