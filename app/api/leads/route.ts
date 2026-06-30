@@ -29,7 +29,7 @@ const PUBLIC_LEAD_RATE_LIMIT = {
 };
 const PUBLIC_LEAD_ERROR = "לא ניתן לשלוח את הפרטים כרגע. אפשר לנסות שוב מאוחר יותר.";
 const TRIAL_ACTIVE_LEAD_LIMIT = 30;
-const UPGRADE_URL = "https://meshulam.co.il/s/e89b2737-e347-bbf1-34ce-ca6ba2b0fb94";
+const UPGRADE_URL = "https://pay.grow.link/MjY1Mzg~e922098df1d5178742779aad9bb69e99-MzYyMzMwNA";
 type LeadWriteClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
 type LeadDataClient = Pick<LeadWriteClient, "from">;
 
