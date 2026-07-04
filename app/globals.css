@@ -35,6 +35,22 @@ html.theme-light {
   --text-muted: #71717a;
 }
 
+html.theme-trainer {
+  color-scheme: light;
+  --color-bg-main: #ffffff;
+  --color-bg-card: #ffffff;
+  --color-bg-glass: rgba(255, 255, 255, 0.9);
+  --color-bg-soft: #f8fafc;
+  --color-bg-input: #ffffff;
+  --color-border: #d1fae5;
+  --color-gold: #16a34a;
+  --color-gold-soft: #dcfce7;
+  --color-green: #16a34a;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #64748b;
+}
+
 html {
   direction: rtl;
   max-width: 100%;
@@ -59,6 +75,14 @@ html.theme-light body {
     radial-gradient(circle at top right, rgba(201, 162, 39, 0.14), transparent 34rem),
     radial-gradient(circle at 16% 8%, rgba(229, 199, 107, 0.08), transparent 30rem),
     linear-gradient(180deg, #ffffff 0%, var(--color-bg-main) 48%, #f1efe8 100%);
+}
+
+html.theme-trainer body {
+  color: var(--text-primary);
+  background:
+    radial-gradient(circle at top right, rgba(22, 163, 74, 0.18), transparent 34rem),
+    radial-gradient(circle at 16% 8%, rgba(220, 252, 231, 0.56), transparent 30rem),
+    linear-gradient(180deg, #ffffff 0%, #f8fafc 50%, #dcfce7 100%);
 }
 
 *,
@@ -253,4 +277,145 @@ html.theme-light [class*="border-white/"] {
 html.theme-light [class*="bg-[radial-gradient"],
 html.theme-light [class*="bg-[linear-gradient"] {
   background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(247, 244, 235, 0.94));
+}
+
+html.theme-trainer .panel,
+html.theme-trainer .card-default {
+  border-color: var(--color-border);
+  background: var(--color-bg-glass);
+  box-shadow: 0 24px 70px rgba(6, 78, 59, 0.1);
+}
+
+html.theme-trainer .card-money,
+html.theme-trainer .card-success {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: linear-gradient(135deg, rgba(220, 252, 231, 0.85), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 24px 70px rgba(6, 78, 59, 0.1), 0 0 26px rgba(22, 163, 74, 0.1);
+}
+
+html.theme-trainer .card-danger {
+  background: linear-gradient(135deg, rgba(229, 72, 77, 0.08), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 24px 70px rgba(6, 78, 59, 0.08);
+}
+
+html.theme-trainer .field {
+  border-color: var(--color-border);
+  background: var(--color-bg-input);
+  color: var(--text-primary);
+}
+
+html.theme-trainer .button-primary,
+html.theme-trainer .button-success {
+  background: linear-gradient(270deg, #16a34a, #064e3b);
+  color: #ffffff;
+  box-shadow: 0 14px 36px rgba(6, 78, 59, 0.2), 0 0 30px rgba(22, 163, 74, 0.18);
+}
+
+html.theme-trainer .button-primary:hover,
+html.theme-trainer .button-success:hover {
+  box-shadow: 0 18px 46px rgba(6, 78, 59, 0.24), 0 0 38px rgba(22, 163, 74, 0.24);
+}
+
+html.theme-trainer .button-secondary {
+  border-color: var(--color-border);
+  background: var(--color-bg-card);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+
+html.theme-trainer .button-secondary:hover {
+  border-color: rgba(22, 163, 74, 0.38);
+  background: #f8fafc;
+  color: #064e3b;
+}
+
+html.theme-trainer .theme-toggle {
+  border-color: rgba(22, 163, 74, 0.24);
+  background: rgba(255, 255, 255, 0.9);
+  color: #064e3b;
+  box-shadow: 0 8px 24px rgba(6, 78, 59, 0.1);
+}
+
+html.theme-trainer option,
+html.theme-trainer .bg-zinc-950,
+html.theme-trainer .bg-zinc-950\/95 {
+  background-color: #ffffff;
+  color: var(--text-primary);
+}
+
+html.theme-trainer .text-white,
+html.theme-trainer .text-zinc-100 {
+  color: var(--text-primary);
+}
+
+html.theme-trainer .text-zinc-200,
+html.theme-trainer .text-zinc-300 {
+  color: var(--text-secondary);
+}
+
+html.theme-trainer .text-zinc-400,
+html.theme-trainer .text-zinc-500,
+html.theme-trainer .text-zinc-600 {
+  color: var(--text-muted);
+}
+
+html.theme-trainer [class*="text-gold"] {
+  color: #064e3b;
+}
+
+html.theme-trainer [class*="border-gold"] {
+  border-color: rgba(22, 163, 74, 0.35);
+}
+
+html.theme-trainer [class*="bg-gold"] {
+  background-color: rgba(220, 252, 231, 0.75);
+}
+
+html.theme-trainer [class*="from-gold"] {
+  --tw-gradient-from: #16a34a var(--tw-gradient-from-position);
+  --tw-gradient-to: rgba(22, 163, 74, 0) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+html.theme-trainer [class*="to-gold"] {
+  --tw-gradient-to: #064e3b var(--tw-gradient-to-position);
+}
+
+html.theme-trainer [class~="bg-black/10"],
+html.theme-trainer [class~="bg-black/15"],
+html.theme-trainer [class~="bg-black/20"],
+html.theme-trainer [class~="bg-black/25"],
+html.theme-trainer [class~="bg-black/30"],
+html.theme-trainer [class~="bg-black/35"],
+html.theme-trainer [class~="bg-black/40"],
+html.theme-trainer [class~="bg-black/45"],
+html.theme-trainer [class~="bg-black/55"],
+html.theme-trainer [class~="bg-black/85"] {
+  background-color: rgba(255, 255, 255, 0.84);
+}
+
+html.theme-trainer [class~="bg-white/5"],
+html.theme-trainer [class~="bg-white/10"],
+html.theme-trainer [class~="bg-white/[0.025]"],
+html.theme-trainer [class~="bg-white/[0.03]"],
+html.theme-trainer [class~="bg-white/[0.035]"],
+html.theme-trainer [class~="bg-white/[0.04]"],
+html.theme-trainer [class~="bg-white/[0.045]"],
+html.theme-trainer [class~="bg-white/[0.055]"],
+html.theme-trainer [class~="bg-white/[0.06]"],
+html.theme-trainer [class~="bg-white/[0.07]"],
+html.theme-trainer [class~="bg-white/[0.08]"],
+html.theme-trainer [class~="bg-white/[0.10]"],
+html.theme-trainer [class~="bg-white/[0.14]"],
+html.theme-trainer [class~="bg-white/[0.24]"] {
+  background-color: var(--color-bg-soft);
+}
+
+html.theme-trainer [class*="border-white/"] {
+  border-color: var(--color-border);
+}
+
+html.theme-trainer [class*="bg-[radial-gradient"],
+html.theme-trainer [class*="bg-[linear-gradient"] {
+  background-image: linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(220, 252, 231, 0.88));
 }

@@ -11,11 +11,11 @@ const themeInitScript = `
   (function () {
     try {
       var savedTheme = window.localStorage.getItem("goldenflow-theme");
-      var theme = savedTheme === "light" ? "light" : "dark";
+      var theme = savedTheme === "light" || savedTheme === "trainer" ? savedTheme : "dark";
       var themeClass = "theme-" + theme;
-      document.documentElement.classList.remove("theme-dark", "theme-light");
+      document.documentElement.classList.remove("theme-dark", "theme-light", "theme-trainer");
       document.documentElement.classList.add(themeClass);
-      document.body.classList.remove("theme-dark", "theme-light");
+      document.body.classList.remove("theme-dark", "theme-light", "theme-trainer");
       document.body.classList.add(themeClass);
     } catch (_) {
       document.documentElement.classList.add("theme-dark");
