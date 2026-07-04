@@ -10,7 +10,7 @@ const THEME_CLASSES = ["theme-dark", "theme-light", "theme-trainer"];
 const THEMES: Array<{ label: string; value: Theme }> = [
   { label: "מצב בהיר", value: "light" },
   { label: "מצב כהה", value: "dark" },
-  { label: "מצב טריינר", value: "trainer" },
+  { label: "מצב טריינר - גרין מוד", value: "trainer" },
 ];
 
 function normalizeTheme(value: string | null): Theme {
