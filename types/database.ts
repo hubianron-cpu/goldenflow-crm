@@ -315,6 +315,167 @@ export type Database = {
         };
         Relationships: [];
       };
+      business_center_monthly_metrics: {
+        Row: {
+          actual_content_published: number;
+          actual_leads: number;
+          actual_new_customers: number;
+          actual_revenue: number;
+          actual_sales_calls: number;
+          created_at: string;
+          id: string;
+          month_start: string;
+          notes: string | null;
+          target_content_published: number | null;
+          target_leads: number | null;
+          target_new_customers: number | null;
+          target_revenue: number | null;
+          target_sales_calls: number | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          actual_content_published?: number;
+          actual_leads?: number;
+          actual_new_customers?: number;
+          actual_revenue?: number;
+          actual_sales_calls?: number;
+          created_at?: string;
+          id?: string;
+          month_start: string;
+          notes?: string | null;
+          target_content_published?: number | null;
+          target_leads?: number | null;
+          target_new_customers?: number | null;
+          target_revenue?: number | null;
+          target_sales_calls?: number | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          actual_content_published?: number;
+          actual_leads?: number;
+          actual_new_customers?: number;
+          actual_revenue?: number;
+          actual_sales_calls?: number;
+          created_at?: string;
+          id?: string;
+          month_start?: string;
+          notes?: string | null;
+          target_content_published?: number | null;
+          target_leads?: number | null;
+          target_new_customers?: number | null;
+          target_revenue?: number | null;
+          target_sales_calls?: number | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      business_center_social_profiles: {
+        Row: {
+          created_at: string;
+          data_source: "manual";
+          display_name: string;
+          external_account_id: string | null;
+          followers_goal: number | null;
+          handle: string | null;
+          id: string;
+          is_active: boolean;
+          last_synced_at: string | null;
+          normalized_handle: string | null;
+          normalized_profile_url: string | null;
+          platform: "Instagram" | "TikTok" | "YouTube" | "Facebook" | "LinkedIn" | "Other";
+          profile_url: string | null;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          data_source?: "manual";
+          display_name?: string;
+          external_account_id?: string | null;
+          followers_goal?: number | null;
+          handle?: string | null;
+          id?: string;
+          is_active?: boolean;
+          last_synced_at?: string | null;
+          normalized_handle?: string | null;
+          normalized_profile_url?: string | null;
+          platform: "Instagram" | "TikTok" | "YouTube" | "Facebook" | "LinkedIn" | "Other";
+          profile_url?: string | null;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          data_source?: "manual";
+          display_name?: string;
+          external_account_id?: string | null;
+          followers_goal?: number | null;
+          handle?: string | null;
+          id?: string;
+          is_active?: boolean;
+          last_synced_at?: string | null;
+          normalized_handle?: string | null;
+          normalized_profile_url?: string | null;
+          platform?: "Instagram" | "TikTok" | "YouTube" | "Facebook" | "LinkedIn" | "Other";
+          profile_url?: string | null;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
+      business_center_social_snapshots: {
+        Row: {
+          attributed_leads_count: number | null;
+          created_at: string;
+          data_source: "manual";
+          followers_count: number;
+          id: string;
+          notes: string | null;
+          profile_visits_count: number | null;
+          snapshot_date: string;
+          social_profile_id: string;
+          updated_at: string;
+          views_count: number | null;
+        };
+        Insert: {
+          attributed_leads_count?: number | null;
+          created_at?: string;
+          data_source?: "manual";
+          followers_count?: number;
+          id?: string;
+          notes?: string | null;
+          profile_visits_count?: number | null;
+          snapshot_date: string;
+          social_profile_id: string;
+          updated_at?: string;
+          views_count?: number | null;
+        };
+        Update: {
+          attributed_leads_count?: number | null;
+          created_at?: string;
+          data_source?: "manual";
+          followers_count?: number;
+          id?: string;
+          notes?: string | null;
+          profile_visits_count?: number | null;
+          snapshot_date?: string;
+          social_profile_id?: string;
+          updated_at?: string;
+          views_count?: number | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "business_center_social_snapshots_social_profile_id_fkey";
+            columns: ["social_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "business_center_social_profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       task_automations_log: {
         Row: {
           created_at: string;
