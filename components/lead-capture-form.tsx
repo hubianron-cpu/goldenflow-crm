@@ -8,6 +8,7 @@ const initialForm = {
   name: "",
   phone: "",
   value: "",
+  website: "",
 };
 
 function isValidPhone(value: string) {
@@ -61,6 +62,7 @@ export function LeadCaptureForm({ source }: { source: string }) {
           source: normalizedSource,
           status: "ליד חדש",
           value: form.value ? Number(form.value) : 0,
+          website: form.website.trim(),
         }),
         headers: { "Content-Type": "application/json" },
         method: "POST",
@@ -123,6 +125,20 @@ export function LeadCaptureForm({ source }: { source: string }) {
           placeholder="אופציונלי"
           type="number"
           value={form.value}
+        />
+      </label>
+
+      <label
+        aria-hidden="true"
+        className="absolute -left-[10000px] h-px w-px overflow-hidden"
+      >
+        Website
+        <input
+          autoComplete="off"
+          name="website"
+          onChange={(event) => updateField("website", event.target.value)}
+          tabIndex={-1}
+          value={form.website}
         />
       </label>
 

@@ -3,22 +3,35 @@ import { revalidatePath } from "next/cache";
 import { hasSupabaseEnv } from "@/lib/env";
 import {
   isLeadStatus,
+  LEAD_STATUSES,
   isNextActionType,
   normalizeLeadStatus,
   isPriority,
+  isFinalLeadStatus,
   shouldMoveToReactivation,
   type Lead,
   type LeadStatus,
   type NextActionType,
   type Priority,
 } from "@/lib/leads";
+import { isAdminEmail } from "@/lib/admin";
+import { checkRateLimit, getClientIp, getRateLimitResponseHeaders } from "@/lib/security/rate-limit";
 import { requireSubscriptionAccess } from "@/lib/subscription-guard";
+import { getSubscriptionAccess, type SubscriptionAccess } from "@/lib/subscriptions";
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 
 const leadSelect =
   "id, closed_at, created_at, deal_probability, last_contact_date, name:full_name, next_action_date, next_action_type, notes, phone, priority, reason_not_closed, source, status, updated_at, user_id, value";
+const PUBLIC_LEAD_RATE_LIMIT = {
+  limit: 20,
+  windowMs: 10 * 60 * 1000,
+};
+const PUBLIC_LEAD_ERROR = "לא ניתן לשלוח את הפרטים כרגע. אפשר לנסות שוב מאוחר יותר.";
+const TRIAL_ACTIVE_LEAD_LIMIT = 30;
+const UPGRADE_URL = "https://pay.grow.link/MjY1Mzg~e922098df1d5178742779aad9bb69e99-MzYyMzMwNA";
 type LeadWriteClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
+type LeadDataClient = Pick<LeadWriteClient, "from">;
 
 function jsonError(message: string, status: number, meta?: Record<string, unknown>) {
   return NextResponse.json({ error: message, ...meta }, { status });
@@ -54,6 +67,87 @@ function getSupabaseErrorMeta(error: {
     hint: error.hint ?? null,
     message: error.message ?? null,
   };
+}
+
+function getTrialLeadLimitResponse() {
+  return NextResponse.json(
+    {
+      error: "TRIAL_ACTIVE_LEAD_LIMIT_REACHED",
+      limit: TRIAL_ACTIVE_LEAD_LIMIT,
+      message:
+        "הגעת למגבלת 30 הלידים הפעילים בתקופת הניסיון.\n\nכדי להוסיף לידים נוספים ולהמשיך לנהל את העסק ללא הגבלה, יש לשדרג למנוי פעיל.",
+      upgradeUrl: UPGRADE_URL,
+    },
+    { status: 403 },
+  );
+}
+
+async function getSubscriptionAccessForUser(supabase: LeadDataClient, userId: string) {
+  const { data, error } = await supabase
+    .from("user_subscriptions")
+    .select("status,trial_end_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    logSupabaseError("lead_limit.subscription_select", error);
+  }
+
+  return getSubscriptionAccess(data);
+}
+
+async function getIsAdminOwner(admin: LeadWriteClient, userId: string) {
+  const { data, error } = await admin.auth.admin.getUserById(userId);
+
+  if (error) {
+    console.error("LEAD_LIMIT_ADMIN_LOOKUP_FAILED", {
+      message: error.message ?? null,
+      status: error.status ?? null,
+    });
+  }
+
+  return isAdminEmail(data.user?.email);
+}
+
+function shouldApplyTrialLeadLimit(access: SubscriptionAccess, isAdmin: boolean) {
+  return !isAdmin && access.hasAccess && access.isTrial && !access.isActive;
+}
+
+async function countActiveLeads(supabase: LeadDataClient, userId: string) {
+  const { data, error } = await supabase.from("leads").select("status").eq("user_id", userId);
+
+  if (error) {
+    logSupabaseError("lead_limit.leads_select", error);
+    return { error };
+  }
+
+  return {
+    count: (data ?? []).filter((lead) => !isFinalLeadStatus(lead.status)).length,
+  };
+}
+
+async function checkTrialActiveLeadLimit({
+  access,
+  isAdmin,
+  supabase,
+  userId,
+}: {
+  access: SubscriptionAccess;
+  isAdmin: boolean;
+  supabase: LeadDataClient;
+  userId: string;
+}) {
+  if (!shouldApplyTrialLeadLimit(access, isAdmin)) {
+    return { blocked: false };
+  }
+
+  const activeLeads = await countActiveLeads(supabase, userId);
+
+  if ("error" in activeLeads) {
+    return { blocked: false, error: activeLeads.error };
+  }
+
+  return { blocked: activeLeads.count >= TRIAL_ACTIVE_LEAD_LIMIT };
 }
 
 async function getContext() {
@@ -111,7 +205,13 @@ async function getOptionalWriteContext() {
       return { error: jsonError(subscription.error, subscription.status) };
     }
 
-    return { source: "session" as const, supabase, userId: user.id };
+    return {
+      access: await getSubscriptionAccessForUser(supabase as unknown as LeadDataClient, user.id),
+      isAdmin: isAdminEmail(user.email),
+      source: "session" as const,
+      supabase,
+      userId: user.id,
+    };
   }
 
   const admin = getSupabaseAdminClient();
@@ -119,14 +219,17 @@ async function getOptionalWriteContext() {
 
   if (!admin || !defaultOwnerId) {
     return {
-      error: jsonError(
-        "Public lead capture is not configured. Set SUPABASE_SERVICE_ROLE_KEY and SUPABASE_DEFAULT_OWNER_ID.",
-        503,
-      ),
+      error: jsonError(PUBLIC_LEAD_ERROR, 503),
     };
   }
 
-  return { source: "public" as const, supabase: admin, userId: defaultOwnerId };
+  return {
+    access: await getSubscriptionAccessForUser(admin, defaultOwnerId),
+    isAdmin: await getIsAdminOwner(admin, defaultOwnerId),
+    source: "public" as const,
+    supabase: admin,
+    userId: defaultOwnerId,
+  };
 }
 
 function cleanOptional(value: unknown) {
@@ -162,6 +265,47 @@ function parseProbability(value: unknown) {
 
 function isValidPhone(value: string | null) {
   return !value || /^[0-9+\-()\s]{7,20}$/.test(value);
+}
+
+function isValidPublicPhone(value: string | null) {
+  return !value || /^[0-9+\-()\s]{7,30}$/.test(value);
+}
+
+function isValidEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+function isTooLong(value: string | null, maxLength: number) {
+  return Boolean(value && value.length > maxLength);
+}
+
+function getPublicLeadRateLimitedResponse(retryAfter: number) {
+  return NextResponse.json(
+    { error: "יותר מדי ניסיונות שליחה. נסו שוב בעוד כמה דקות." },
+    { headers: getRateLimitResponseHeaders(retryAfter), status: 429 },
+  );
+}
+
+function validatePublicLeadRequest(record: Record<string, unknown>, lead: ReturnType<typeof normalizeLeadPayload>) {
+  const email = typeof record.email === "string" ? record.email.trim() : "";
+
+  if (!lead.name || isTooLong(lead.name, 100)) {
+    return "Lead name is invalid.";
+  }
+
+  if (!lead.phone || lead.phone.length > 30 || !isValidPublicPhone(lead.phone)) {
+    return "Phone number is invalid.";
+  }
+
+  if (email && (email.length > 254 || !isValidEmail(email))) {
+    return "Email is invalid.";
+  }
+
+  if (isTooLong(lead.source, 120) || isTooLong(lead.notes, 1000) || isTooLong(lead.reason_not_closed, 1000)) {
+    return "Lead details are invalid.";
+  }
+
+  return "";
 }
 
 function normalizeLeadPayload(body: Record<string, unknown>) {
@@ -407,22 +551,47 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
   if (!body || typeof body !== "object") {
-    return jsonError("Invalid request body.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Invalid request body.", 400);
   }
 
-  const lead = normalizeLeadPayload(body as Record<string, unknown>);
+  const record = body as Record<string, unknown>;
+
+  if (context.source === "public") {
+    const clientIp = getClientIp(request.headers);
+    const rateLimit = checkRateLimit({
+      key: `public-lead:${clientIp}`,
+      limit: PUBLIC_LEAD_RATE_LIMIT.limit,
+      windowMs: PUBLIC_LEAD_RATE_LIMIT.windowMs,
+    });
+
+    if (!rateLimit.allowed) {
+      return getPublicLeadRateLimitedResponse(rateLimit.retryAfter);
+    }
+
+    if (cleanOptional(record.website)) {
+      return NextResponse.json({ success: true }, { status: 200 });
+    }
+  }
+
+  const lead = normalizeLeadPayload(record);
+  const publicValidationError = context.source === "public" ? validatePublicLeadRequest(record, lead) : "";
+
+  if (publicValidationError) {
+    return jsonError(PUBLIC_LEAD_ERROR, 400);
+  }
+
   const isQuickWhatsapp = lead.source === "whatsapp";
 
   if (!lead.name && !isQuickWhatsapp) {
-    return jsonError("Lead name is required.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Lead name is required.", 400);
   }
 
   if (!lead.phone) {
-    return jsonError("Phone number is required.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Phone number is required.", 400);
   }
 
   if (!isValidPhone(lead.phone)) {
-    return jsonError("Phone number is invalid.", 400);
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Phone number is invalid.", 400);
   }
 
   const now = new Date().toISOString();
@@ -439,7 +608,9 @@ export async function POST(request: Request) {
 
   if (duplicateCheckError) {
     logSupabaseError("leads.duplicate_check", duplicateCheckError);
-    return jsonError(getSupabaseErrorMessage(duplicateCheckError), 500, getSupabaseErrorMeta(duplicateCheckError));
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError(getSupabaseErrorMessage(duplicateCheckError), 500, getSupabaseErrorMeta(duplicateCheckError));
   }
 
   if (existingLead) {
@@ -459,7 +630,9 @@ export async function POST(request: Request) {
 
     if (error) {
       logSupabaseError("leads.duplicate_update", error);
-      return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
+      return context.source === "public"
+        ? jsonError(PUBLIC_LEAD_ERROR, 500)
+        : jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
     }
 
     const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId);
@@ -474,6 +647,24 @@ export async function POST(request: Request) {
     );
   }
 
+  const leadStatus = isFinalLeadStatus(lead.status) ? LEAD_STATUSES[0].value : lead.status;
+  const limitCheck = await checkTrialActiveLeadLimit({
+    access: context.access,
+    isAdmin: context.isAdmin,
+    supabase: writeSupabase,
+    userId: ownerId,
+  });
+
+  if (limitCheck.blocked) {
+    return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 403) : getTrialLeadLimitResponse();
+  }
+
+  if (limitCheck.error) {
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError("לא ניתן לבדוק את מגבלת הלידים כרגע. נסו שוב מאוחר יותר.", 500);
+  }
+
   const { data, error } = await writeSupabase
     .from("leads")
     .insert({
@@ -482,7 +673,7 @@ export async function POST(request: Request) {
       full_name: leadName,
       next_action_date: now,
       notes: lead.notes,
-      status: lead.status satisfies LeadStatus,
+      status: leadStatus satisfies LeadStatus,
       next_action_type: "call" satisfies NextActionType,
       phone,
       priority: lead.priority satisfies Priority,
@@ -496,7 +687,9 @@ export async function POST(request: Request) {
 
   if (error) {
     logSupabaseError("leads.insert", error);
-    return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
+    return context.source === "public"
+      ? jsonError(PUBLIC_LEAD_ERROR, 500)
+      : jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
   }
 
   const automationError = await runTaskAutomations(writeSupabase, data as Lead, ownerId, { newLead: true });

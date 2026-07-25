@@ -1,18 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Leaf } from "lucide-react";
 
-type Theme = "dark" | "light";
+type Theme = "dark" | "light" | "trainer";
 
 const THEME_STORAGE_KEY = "goldenflow-theme";
+const THEME_CLASSES = ["theme-dark", "theme-light", "theme-trainer"];
+const THEMES: Array<{ label: string; value: Theme }> = [
+  { label: "מצב בהיר", value: "light" },
+  { label: "מצב כהה", value: "dark" },
+  { label: "מצב טריינר - גרין מוד", value: "trainer" },
+];
+
+function normalizeTheme(value: string | null): Theme {
+  return value === "light" || value === "trainer" ? value : "dark";
+}
 
 function applyTheme(theme: Theme) {
   const themeClass = `theme-${theme}`;
 
-  document.documentElement.classList.remove("theme-dark", "theme-light");
+  document.documentElement.classList.remove(...THEME_CLASSES);
   document.documentElement.classList.add(themeClass);
-  document.body.classList.remove("theme-dark", "theme-light");
+  document.body.classList.remove(...THEME_CLASSES);
   document.body.classList.add(themeClass);
 }
 
@@ -21,34 +31,34 @@ export function ThemeToggle() {
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
-    const initialTheme: Theme = savedTheme === "light" ? "light" : "dark";
+    const initialTheme = normalizeTheme(savedTheme);
 
     setTheme(initialTheme);
     applyTheme(initialTheme);
   }, []);
 
-  function toggleTheme() {
-    const nextTheme: Theme = theme === "dark" ? "light" : "dark";
+  function changeTheme(nextTheme: Theme) {
 
     setTheme(nextTheme);
     window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
     applyTheme(nextTheme);
   }
 
-  const isDark = theme === "dark";
-  const label = isDark ? "מצב בהיר" : "מצב כהה";
-
   return (
-    <button
-      aria-label={label}
-      aria-pressed={!isDark}
-      className="theme-toggle"
-      onClick={toggleTheme}
-      title={label}
-      type="button"
-    >
-      {isDark ? <Sun aria-hidden="true" className="h-4 w-4" /> : <Moon aria-hidden="true" className="h-4 w-4" />}
-      <span className="hidden sm:inline">{label}</span>
-    </button>
+    <label className="theme-toggle" title="בחירת מצב תצוגה">
+      <Leaf aria-hidden="true" className="h-4 w-4" />
+      <select
+        aria-label="בחירת מצב תצוגה"
+        className="bg-transparent text-inherit outline-none"
+        onChange={(event) => changeTheme(normalizeTheme(event.target.value))}
+        value={theme}
+      >
+        {THEMES.map((item) => (
+          <option key={item.value} value={item.value}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
