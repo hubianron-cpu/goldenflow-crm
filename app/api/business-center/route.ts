@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/env";
+import {
+  getBusinessCenterLeadAnalytics,
+  type BusinessCenterLeadSource,
+} from "@/lib/business-center/lead-analytics";
 import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { createServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -346,7 +350,7 @@ export async function GET(request: Request) {
 
   const previousMonthStart = getPreviousMonthStart(monthStart);
   const snapshotCutoff = getMonthEnd(monthStart);
-  const [monthlyResult, previousResult, profilesResult] = await Promise.all([
+  const [monthlyResult, previousResult, profilesResult, leadsResult] = await Promise.all([
     context.supabase
       .from("business_center_monthly_metrics")
       .select("*")
@@ -365,9 +369,14 @@ export async function GET(request: Request) {
       .eq("user_id", context.user.id)
       .order("is_active", { ascending: false })
       .order("created_at", { ascending: false }),
+    context.supabase
+      .from("leads")
+      .select("id, created_at, full_name, next_action_date, status, value")
+      .eq("user_id", context.user.id),
   ]);
 
-  const firstError = monthlyResult.error ?? previousResult.error ?? profilesResult.error;
+  const firstError =
+    monthlyResult.error ?? previousResult.error ?? profilesResult.error ?? leadsResult.error;
   if (firstError) {
     return databaseErrorResponse(firstError, "BUSINESS_CENTER_LOAD_FAILED");
   }
@@ -415,6 +424,10 @@ export async function GET(request: Request) {
       monthly: monthlyResult.data ?? null,
       previous_monthly: previousResult.data ?? null,
       profiles: profilesWithSnapshots,
+      lead_analytics: getBusinessCenterLeadAnalytics(
+        (leadsResult.data ?? []) as BusinessCenterLeadSource[],
+        monthStart,
+      ),
     },
     {
       headers: {
