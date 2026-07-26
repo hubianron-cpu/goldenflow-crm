@@ -132,66 +132,45 @@ export function BusinessCenterLeadIntelligence({
   monthLabel: string;
 }) {
   const monthly = analytics.monthlyActivity;
-  const changeText =
-    monthly.previousTotal === 0
-      ? monthly.total === 0
-        ? "ללא שינוי לעומת החודש הקודם"
-        : "אין בסיס קודם להשוואה"
-      : `${monthly.changeFromPrevious >= 0 ? "+" : ""}${formatNumber(monthly.changeFromPrevious)} לעומת החודש הקודם`;
 
   return (
     <>
       <section className="panel p-5 sm:p-7" aria-labelledby="monthly-leads-title">
-        <div className="mb-5 flex items-start gap-3">
-          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
-            <ContactRound className="h-5 w-5" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-xl font-black text-white" id="monthly-leads-title">
-              פעילות הלידים בחודש
-            </h2>
-            <p className="mt-1 text-sm text-zinc-500">
-              נתוני יצירה מה־CRM עבור {monthLabel}, ללא תלות בסטטוס הנוכחי.
-            </p>
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
+              <ContactRound className="h-5 w-5" />
+            </span>
+            <div className="min-w-0">
+              <h2 className="text-xl font-black text-white" id="monthly-leads-title">
+                מצב הלידים שנכנסו בחודש
+              </h2>
+              <p className="mt-1 text-sm text-zinc-500">
+                חלוקה לפי הסטטוס הנוכחי של הלידים שנוצרו ב{monthLabel}.
+              </p>
+            </div>
           </div>
+          <span className="rounded-full border border-gold/20 bg-gold/10 px-3 py-1 text-[11px] font-bold text-gold-soft">
+            אוטומטי מה־CRM
+          </span>
         </div>
 
-        <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-          <article className="card-default min-w-0 p-5 sm:p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <p className="text-sm font-bold text-zinc-400">לידים שנכנסו החודש</p>
-              <span className="rounded-full border border-gold/20 bg-gold/10 px-3 py-1 text-[11px] font-bold text-gold-soft">
-                אוטומטי מה־CRM
-              </span>
-            </div>
-            <p className="mt-4 text-4xl font-black text-white sm:text-5xl">
-              {formatNumber(monthly.total)}
-            </p>
-            <p className="mt-2 text-sm text-zinc-500">
-              {monthly.total === 0
-                ? `לא נכנסו לידים חדשים ב${monthLabel}.`
-                : `לידים שנוצרו ב${monthLabel}.`}
-            </p>
-            <p className="mt-4 text-xs font-bold text-zinc-400">{changeText}</p>
-          </article>
-
-          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3 lg:grid-cols-1">
-            {[
-              { label: "פתוחים כיום", value: monthly.currentOpen },
-              { label: "נסגרו בהצלחה", value: monthly.currentWon },
-              { label: "לא רלוונטיים", value: monthly.currentIrrelevant },
-            ].map((item) => (
-              <article
-                className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
-                key={item.label}
-              >
-                <p className="text-xs font-bold text-zinc-500">{item.label}</p>
-                <p className="mt-2 text-2xl font-black text-white">
-                  {formatNumber(item.value)}
-                </p>
-              </article>
-            ))}
-          </div>
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+          {[
+            { label: "פתוחים כיום", value: monthly.currentOpen },
+            { label: "נסגרו בהצלחה", value: monthly.currentWon },
+            { label: "לא רלוונטיים", value: monthly.currentIrrelevant },
+          ].map((item) => (
+            <article
+              className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4"
+              key={item.label}
+            >
+              <p className="text-xs font-bold text-zinc-500">{item.label}</p>
+              <p className="mt-2 text-2xl font-black text-white">
+                {formatNumber(item.value)}
+              </p>
+            </article>
+          ))}
         </div>
       </section>
 

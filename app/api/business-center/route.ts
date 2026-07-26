@@ -9,6 +9,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
 type MonthlyInsert = Database["public"]["Tables"]["business_center_monthly_metrics"]["Insert"];
+type MonthlyUpdate = Database["public"]["Tables"]["business_center_monthly_metrics"]["Update"];
 type ProfileInsert = Database["public"]["Tables"]["business_center_social_profiles"]["Insert"];
 type ProfileUpdate = Database["public"]["Tables"]["business_center_social_profiles"]["Update"];
 type SnapshotInsert = Database["public"]["Tables"]["business_center_social_snapshots"]["Insert"];
@@ -192,7 +193,6 @@ function getMonthlyPayload(record: Record<string, unknown>, userId: string) {
   const targetNewCustomers = parseOptionalNumber(record.target_new_customers);
   const targetContentPublished = parseOptionalNumber(record.target_content_published);
   const actualRevenue = parseRequiredNumber(record.actual_revenue);
-  const actualLeads = parseRequiredNumber(record.actual_leads);
   const actualSalesCalls = parseRequiredNumber(record.actual_sales_calls);
   const actualNewCustomers = parseRequiredNumber(record.actual_new_customers);
   const actualContentPublished = parseRequiredNumber(record.actual_content_published);
@@ -211,7 +211,6 @@ function getMonthlyPayload(record: Record<string, unknown>, userId: string) {
     targetSalesCalls,
     targetNewCustomers,
     targetContentPublished,
-    actualLeads,
     actualSalesCalls,
     actualNewCustomers,
     actualContentPublished,
@@ -225,23 +224,25 @@ function getMonthlyPayload(record: Record<string, unknown>, userId: string) {
     return { error: "ההערה החודשית יכולה להכיל עד 1,000 תווים." };
   }
 
-  const payload: MonthlyInsert = {
+  const updatePayload: MonthlyUpdate = {
     actual_content_published: actualContentPublished,
-    actual_leads: actualLeads,
     actual_new_customers: actualNewCustomers,
     actual_revenue: actualRevenue,
     actual_sales_calls: actualSalesCalls,
-    month_start: monthStart,
     notes: notes || null,
     target_content_published: targetContentPublished,
     target_leads: targetLeads,
     target_new_customers: targetNewCustomers,
     target_revenue: targetRevenue,
     target_sales_calls: targetSalesCalls,
+  };
+  const insertPayload: MonthlyInsert = {
+    ...updatePayload,
+    month_start: monthStart,
     user_id: userId,
   };
 
-  return { payload };
+  return { insertPayload, monthStart, updatePayload };
 }
 
 function getProfilePayload(record: Record<string, unknown>, userId: string) {
@@ -375,8 +376,12 @@ export async function GET(request: Request) {
       .eq("user_id", context.user.id),
   ]);
 
-  const firstError =
-    monthlyResult.error ?? previousResult.error ?? profilesResult.error ?? leadsResult.error;
+  if (leadsResult.error) {
+    logDatabaseError("BUSINESS_CENTER_LEADS_LOAD_FAILED", leadsResult.error);
+    return jsonError("לא ניתן לטעון את נתוני הלידים מה־CRM.", 500);
+  }
+
+  const firstError = monthlyResult.error ?? previousResult.error ?? profilesResult.error;
   if (firstError) {
     return databaseErrorResponse(firstError, "BUSINESS_CENTER_LOAD_FAILED");
   }
@@ -455,17 +460,42 @@ export async function PUT(request: Request) {
     return jsonError(parsed.error ?? "בקשה לא תקינה.", 400);
   }
 
-  const { data, error } = await context.supabase
+  const existingResult = await context.supabase
     .from("business_center_monthly_metrics")
-    .upsert(parsed.payload, { onConflict: "user_id,month_start" })
-    .select("*")
-    .single();
+    .select("id")
+    .eq("user_id", context.user.id)
+    .eq("month_start", parsed.monthStart)
+    .maybeSingle();
 
-  if (error) {
-    return databaseErrorResponse(error, "BUSINESS_CENTER_MONTHLY_SAVE_FAILED");
+  if (existingResult.error) {
+    return databaseErrorResponse(
+      existingResult.error,
+      "BUSINESS_CENTER_MONTHLY_EXISTENCE_CHECK_FAILED",
+    );
   }
 
-  return NextResponse.json({ monthly: data }, { status: 200 });
+  const saveResult = existingResult.data
+    ? await context.supabase
+        .from("business_center_monthly_metrics")
+        .update(parsed.updatePayload)
+        .eq("id", existingResult.data.id)
+        .eq("user_id", context.user.id)
+        .select("*")
+        .single()
+    : await context.supabase
+        .from("business_center_monthly_metrics")
+        .insert(parsed.insertPayload)
+        .select("*")
+        .single();
+
+  if (saveResult.error) {
+    return databaseErrorResponse(
+      saveResult.error,
+      "BUSINESS_CENTER_MONTHLY_SAVE_FAILED",
+    );
+  }
+
+  return NextResponse.json({ monthly: saveResult.data }, { status: 200 });
 }
 
 export async function POST(request: Request) {
