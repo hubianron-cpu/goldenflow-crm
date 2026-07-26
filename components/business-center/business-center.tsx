@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
@@ -9,6 +10,7 @@ import {
   ExternalLink,
   Gauge,
   Lightbulb,
+  Library,
   Pencil,
   Plus,
   Save,
@@ -1005,19 +1007,28 @@ export function BusinessCenter() {
             </p>
           </div>
 
-          <FormField label="חודש להצגה">
-            <div className="relative min-w-0 sm:w-56">
-              <CalendarDays className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gold-soft" />
-              <input
-                aria-label="בחירת חודש"
-                className="field pr-10"
-                disabled={loading || isSaving}
-                onChange={(event) => requestMonthChange(event.target.value)}
-                type="month"
-                value={selectedMonth}
-              />
-            </div>
-          </FormField>
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:items-end">
+            <FormField label="חודש להצגה">
+              <div className="relative min-w-0 sm:w-56">
+                <CalendarDays className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-gold-soft" />
+                <input
+                  aria-label="בחירת חודש"
+                  className="field pr-10"
+                  disabled={loading || isSaving}
+                  onChange={(event) => requestMonthChange(event.target.value)}
+                  type="month"
+                  value={selectedMonth}
+                />
+              </div>
+            </FormField>
+            <Link
+              className="button-secondary min-h-10 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+              href="/business-center/content"
+            >
+              <Library className="h-4 w-4 text-gold-soft" />
+              ספריית התוכן
+            </Link>
+          </div>
         </div>
       </section>
 
