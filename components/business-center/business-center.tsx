@@ -17,7 +17,9 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
+import { BusinessCenterLeadIntelligence } from "@/components/business-center/lead-intelligence";
 import { StatusMessage } from "@/components/status-message";
+import type { BusinessCenterLeadAnalytics } from "@/lib/business-center/lead-analytics";
 import type { Database } from "@/types/database";
 
 type MonthlyMetrics = Database["public"]["Tables"]["business_center_monthly_metrics"]["Row"];
@@ -31,6 +33,7 @@ type ProfileWithSnapshots = SocialProfile & {
 };
 
 type BusinessCenterResponse = {
+  lead_analytics: BusinessCenterLeadAnalytics;
   monthly: MonthlyMetrics | null;
   previous_monthly: MonthlyMetrics | null;
   profiles: ProfileWithSnapshots[];
@@ -357,6 +360,7 @@ function getProfileLastUpdated(profile: ProfileWithSnapshots) {
 }
 
 function getBusinessInsights(
+  leadAnalytics: BusinessCenterLeadAnalytics | null,
   monthly: MonthlyMetrics | null,
   profiles: ProfileWithSnapshots[],
   selectedMonth: string,
@@ -390,8 +394,14 @@ function getBusinessInsights(
     .sort((a, b) => b.growth - a.growth);
   const bestSocialGrowth = profilesWithGrowth[0] ?? null;
 
-  let salesText = "עדיין אין נתונים חודשיים שמורים לניתוח מצב המכירות.";
-  if (monthly) {
+  let salesText = "עדיין אין נתוני לידים מה־CRM לניתוח מצב המכירות.";
+  if (leadAnalytics) {
+    const activity = leadAnalytics.monthlyActivity;
+    salesText =
+      activity.total === 0
+        ? "לא נכנסו לידים בחודש שנבחר לפי נתוני ה־CRM."
+        : `${activity.total} לידים נכנסו בחודש שנבחר. ${activity.currentOpen} מהם עדיין פתוחים, ו־${activity.currentWon} נסגרו בהצלחה.`;
+  } else if (monthly) {
     if (actualLeads === 0) {
       salesText = "לא הוזנו לידים חדשים החודש, ולכן עדיין אי אפשר לזהות את ביצועי משפך המכירה.";
     } else if (leadToCallRate !== null && leadToCallRate < 30) {
@@ -427,7 +437,19 @@ function getBusinessInsights(
     : null;
   const revenuePace = getPaceLabel(revenueProgress, selectedMonth);
 
-  if (monthly && revenuePace === "מאחורי הקצב") {
+  if (leadAnalytics) {
+    if (leadAnalytics.priorities.overdueCount > 0) {
+      actionText = `יש ${leadAnalytics.priorities.overdueCount} לידים שמועד החזרה אליהם עבר. מומלץ להתחיל מהחזרה הוותיקה ביותר.`;
+    } else if (leadAnalytics.priorities.callbacks.total > 0) {
+      actionText = `יש ${leadAnalytics.priorities.callbacks.total} לידים שמועד החזרה אליהם הגיע היום.`;
+    } else if (leadAnalytics.priorities.followupRequiredCount > 0) {
+      actionText = `יש ${leadAnalytics.priorities.followupRequiredCount} לידים שמסומנים כדורשים המשך טיפול.`;
+    } else if (leadAnalytics.priorities.newLeads.total > 0) {
+      actionText = `יש ${leadAnalytics.priorities.newLeads.total} לידים חדשים שממתינים לטיפול. מומלץ להתחיל מהליד הוותיק ביותר.`;
+    } else {
+      actionText = "אין כרגע לידים חדשים, חזרות שמועדן הגיע או לידים שמסומנים כדורשים המשך טיפול.";
+    }
+  } else if (monthly && revenuePace === "מאחורי הקצב") {
     actionText = "ההכנסה מאחורי הקצב החודשי. התמקדו בפעולה שמקדמת את הלידים הקרובים ביותר לשיחת מכירה או לסגירה.";
   } else if (monthly && leadToCallRate !== null && leadToCallRate < 30) {
     actionText = "העדיפות החודש היא להגדיל את מספר שיחות המכירה מתוך הלידים שכבר נכנסו.";
@@ -933,6 +955,7 @@ export function BusinessCenter() {
     },
   ];
   const businessInsights = getBusinessInsights(
+    data?.lead_analytics ?? null,
     monthly,
     data?.profiles ?? [],
     selectedMonth,
@@ -1049,6 +1072,11 @@ export function BusinessCenter() {
               ))}
             </div>
           </section>
+
+          <BusinessCenterLeadIntelligence
+            analytics={data.lead_analytics}
+            monthLabel={formatMonth(selectedMonth)}
+          />
 
           <section className="panel p-5 sm:p-7" aria-labelledby="business-insights-title">
             <div className="mb-5 flex items-start gap-3">
