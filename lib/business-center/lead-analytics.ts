@@ -55,11 +55,14 @@ export type BusinessCenterPriorityGroup = {
 export type BusinessCenterLeadAnalytics = {
   followUpAvailable: true;
   monthlyActivity: {
+    available: true;
     changeFromPrevious: number;
     currentOpen: number;
     currentWon: number;
     currentIrrelevant: number;
+    editable: false;
     previousTotal: number;
+    source: "crm";
     total: number;
   };
   pipeline: Array<{
@@ -334,6 +337,7 @@ export function getBusinessCenterLeadAnalytics(
   return {
     followUpAvailable: true,
     monthlyActivity: {
+      available: true,
       changeFromPrevious: monthlyLeads.length - previousMonthTotal,
       currentIrrelevant: normalizedMonthlyStatuses.filter(
         (status) => status === "לא רלוונטי",
@@ -344,7 +348,9 @@ export function getBusinessCenterLeadAnalytics(
       currentWon: normalizedMonthlyStatuses.filter(
         (status) => status === "נסגר בהצלחה",
       ).length,
+      editable: false,
       previousTotal: previousMonthTotal,
+      source: "crm",
       total: monthlyLeads.length,
     },
     pipeline: BUSINESS_CENTER_LEAD_STAGES.map((stage) => ({

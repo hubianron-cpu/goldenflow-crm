@@ -41,7 +41,6 @@ type BusinessCenterResponse = {
 
 type MonthlyForm = {
   actual_content_published: string;
-  actual_leads: string;
   actual_new_customers: string;
   actual_revenue: string;
   actual_sales_calls: string;
@@ -71,22 +70,30 @@ type SnapshotForm = {
   views_count: string;
 };
 
-type MetricDefinition = {
+type ManualMetricDefinition = {
   actualKey:
     | "actual_revenue"
-    | "actual_leads"
     | "actual_sales_calls"
     | "actual_new_customers"
     | "actual_content_published";
   label: string;
   money?: boolean;
+  source: "manual";
   targetKey:
     | "target_revenue"
-    | "target_leads"
     | "target_sales_calls"
     | "target_new_customers"
     | "target_content_published";
 };
+
+type MetricDefinition =
+  | ManualMetricDefinition
+  | {
+      label: string;
+      money?: false;
+      source: "crm";
+      targetKey: "target_leads";
+    };
 
 const platformOptions: Array<{ label: string; value: SocialProfile["platform"] }> = [
   { label: "Instagram", value: "Instagram" },
@@ -102,33 +109,36 @@ const metricDefinitions: MetricDefinition[] = [
     actualKey: "actual_revenue",
     label: "הכנסה",
     money: true,
+    source: "manual",
     targetKey: "target_revenue",
   },
   {
-    actualKey: "actual_leads",
-    label: "לידים חדשים",
+    label: "לידים שנכנסו החודש",
+    source: "crm",
     targetKey: "target_leads",
   },
   {
     actualKey: "actual_sales_calls",
     label: "שיחות מכירה",
+    source: "manual",
     targetKey: "target_sales_calls",
   },
   {
     actualKey: "actual_new_customers",
     label: "לקוחות חדשים",
+    source: "manual",
     targetKey: "target_new_customers",
   },
   {
     actualKey: "actual_content_published",
     label: "תכנים שפורסמו",
+    source: "manual",
     targetKey: "target_content_published",
   },
 ];
 
 const emptyMonthlyForm: MonthlyForm = {
   actual_content_published: "0",
-  actual_leads: "0",
   actual_new_customers: "0",
   actual_revenue: "0",
   actual_sales_calls: "0",
@@ -221,7 +231,6 @@ function monthlyToForm(monthly: MonthlyMetrics | null): MonthlyForm {
 
   return {
     actual_content_published: String(monthly.actual_content_published),
-    actual_leads: String(monthly.actual_leads),
     actual_new_customers: String(monthly.actual_new_customers),
     actual_revenue: String(monthly.actual_revenue),
     actual_sales_calls: String(monthly.actual_sales_calls),
@@ -346,6 +355,18 @@ function safeRate(numerator: number, denominator: number) {
   return Number.isFinite(value) ? value : null;
 }
 
+function safeLeadRate(numerator: number, monthlyLeads: number | null) {
+  if (monthlyLeads === null) {
+    return null;
+  }
+
+  if (monthlyLeads === 0) {
+    return 0;
+  }
+
+  return safeRate(numerator, monthlyLeads);
+}
+
 function getProfileLastUpdated(profile: ProfileWithSnapshots) {
   const profileUpdatedAt = new Date(profile.updated_at).getTime();
   const snapshotUpdatedAt = profile.latest_snapshot
@@ -361,6 +382,7 @@ function getProfileLastUpdated(profile: ProfileWithSnapshots) {
 
 function getBusinessInsights(
   leadAnalytics: BusinessCenterLeadAnalytics | null,
+  resolvedMonthlyLeads: number | null,
   monthly: MonthlyMetrics | null,
   profiles: ProfileWithSnapshots[],
   selectedMonth: string,
@@ -370,10 +392,9 @@ function getBusinessInsights(
     (profile) => profile.latest_snapshot?.snapshot_date.slice(0, 7) === selectedMonth,
   );
   const profilesMissingMeasurement = activeProfiles.length - measuredThisMonth.length;
-  const actualLeads = monthly?.actual_leads ?? 0;
   const actualCalls = monthly?.actual_sales_calls ?? 0;
   const actualCustomers = monthly?.actual_new_customers ?? 0;
-  const leadToCallRate = safeRate(actualCalls, actualLeads);
+  const leadToCallRate = safeLeadRate(actualCalls, resolvedMonthlyLeads);
   const callToCustomerRate = safeRate(actualCustomers, actualCalls);
   const attributedLeads = measuredThisMonth.reduce(
     (total, profile) => total + (profile.latest_snapshot?.attributed_leads_count ?? 0),
@@ -402,7 +423,7 @@ function getBusinessInsights(
         ? "לא נכנסו לידים בחודש שנבחר לפי נתוני ה־CRM."
         : `${activity.total} לידים נכנסו בחודש שנבחר. ${activity.currentOpen} מהם עדיין פתוחים, ו־${activity.currentWon} נסגרו בהצלחה.`;
   } else if (monthly) {
-    if (actualLeads === 0) {
+    if (resolvedMonthlyLeads === 0) {
       salesText = "לא הוזנו לידים חדשים החודש, ולכן עדיין אי אפשר לזהות את ביצועי משפך המכירה.";
     } else if (leadToCallRate !== null && leadToCallRate < 30) {
       salesText = `רק ${formatNumber(leadToCallRate)}% מהלידים הגיעו לשיחת מכירה. נקודת השיפור המרכזית היא מעבר מהתעניינות לשיחה.`;
@@ -489,6 +510,7 @@ function MetricCard({
   pace,
   previous,
   progress,
+  source,
   target,
 }: {
   actual: number;
@@ -497,13 +519,19 @@ function MetricCard({
   pace: string | null;
   previous: number | null;
   progress: number | null;
+  source: "crm" | "manual";
   target: number | null;
 }) {
   return (
     <article className="card-default min-w-0 p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-sm font-bold text-zinc-300">{label}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-bold text-zinc-300">{label}</p>
+            <span className="rounded-full border border-gold/20 bg-gold/10 px-2 py-0.5 text-[10px] font-bold text-gold-soft">
+              {source === "crm" ? "אוטומטי מה־CRM" : "הזנה ידנית"}
+            </span>
+          </div>
           <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">
             {money ? formatMoney(actual) : formatNumber(actual)}
           </p>
@@ -644,7 +672,6 @@ export function BusinessCenter() {
       ["target_sales_calls", true],
       ["target_new_customers", true],
       ["target_content_published", true],
-      ["actual_leads", false],
       ["actual_sales_calls", false],
       ["actual_new_customers", false],
       ["actual_content_published", false],
@@ -927,7 +954,7 @@ export function BusinessCenter() {
 
   const monthly = data?.monthly ?? null;
   const previousMonthly = data?.previous_monthly ?? null;
-  const actualLeads = monthly?.actual_leads ?? (Number(monthlyForm.actual_leads) || 0);
+  const resolvedMonthlyLeads = data?.lead_analytics.monthlyActivity.total ?? null;
   const actualCalls = monthly?.actual_sales_calls ?? (Number(monthlyForm.actual_sales_calls) || 0);
   const actualCustomers =
     monthly?.actual_new_customers ?? (Number(monthlyForm.actual_new_customers) || 0);
@@ -935,7 +962,7 @@ export function BusinessCenter() {
   const calculatedMetrics = [
     {
       label: "המרה מליד לשיחה",
-      value: safeRate(actualCalls, actualLeads),
+      value: safeLeadRate(actualCalls, resolvedMonthlyLeads),
       suffix: "%",
     },
     {
@@ -945,7 +972,7 @@ export function BusinessCenter() {
     },
     {
       label: "המרה מליד ללקוח",
-      value: safeRate(actualCustomers, actualLeads),
+      value: safeLeadRate(actualCustomers, resolvedMonthlyLeads),
       suffix: "%",
     },
     {
@@ -956,6 +983,7 @@ export function BusinessCenter() {
   ];
   const businessInsights = getBusinessInsights(
     data?.lead_analytics ?? null,
+    resolvedMonthlyLeads,
     monthly,
     data?.profiles ?? [],
     selectedMonth,
@@ -1037,20 +1065,25 @@ export function BusinessCenter() {
 
             <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {metricDefinitions.map((definition) => {
-                const actual = monthly?.[definition.actualKey] ?? 0;
+                const actual = definition.source === "crm"
+                  ? resolvedMonthlyLeads ?? 0
+                  : monthly?.[definition.actualKey] ?? 0;
                 const target = monthly?.[definition.targetKey] ?? null;
-                const previous = previousMonthly?.[definition.actualKey] ?? null;
+                const previous = definition.source === "crm"
+                  ? data.lead_analytics.monthlyActivity.previousTotal
+                  : previousMonthly?.[definition.actualKey] ?? null;
                 const progress = getProgress(actual, target);
 
                 return (
                   <MetricCard
                     actual={actual}
-                    key={definition.actualKey}
+                    key={definition.targetKey}
                     label={definition.label}
                     money={definition.money}
                     pace={getPaceLabel(progress, selectedMonth)}
                     previous={previous}
                     progress={progress}
+                    source={definition.source}
                     target={target}
                   />
                 );
@@ -1207,7 +1240,7 @@ export function BusinessCenter() {
               <div>
                 <h3 className="mb-4 text-sm font-black text-gold-soft">תוצאות בפועל</h3>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  <FormField label="הכנסה בפועל">
+                  <FormField hint="הזנה ידנית" label="הכנסה בפועל">
                     <input
                       className="field"
                       inputMode="decimal"
@@ -1218,18 +1251,27 @@ export function BusinessCenter() {
                       value={monthlyForm.actual_revenue}
                     />
                   </FormField>
-                  <FormField label="לידים חדשים בפועל">
-                    <input
-                      className="field"
-                      inputMode="numeric"
-                      min="0"
-                      onChange={(event) => updateMonthlyField("actual_leads", event.target.value)}
-                      step="1"
-                      type="number"
-                      value={monthlyForm.actual_leads}
-                    />
-                  </FormField>
-                  <FormField label="שיחות מכירה בפועל">
+                  <div className="min-w-0">
+                    <span className="mb-2 block text-sm font-bold text-zinc-300">
+                      לידים שנכנסו בפועל
+                    </span>
+                    <div className="rounded-2xl border border-gold/20 bg-gold/10 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <span className="text-2xl font-black text-white">
+                          {resolvedMonthlyLeads === null
+                            ? "אין נתון זמין"
+                            : formatNumber(resolvedMonthlyLeads)}
+                        </span>
+                        <span className="rounded-full border border-gold/20 bg-black/20 px-2.5 py-1 text-[11px] font-bold text-gold-soft">
+                          אוטומטי מה־CRM
+                        </span>
+                      </div>
+                      <p className="mt-2 text-xs leading-5 text-zinc-500">
+                        מספר הלידים מחושב לפי הלידים שנוצרו במערכת בחודש שנבחר.
+                      </p>
+                    </div>
+                  </div>
+                  <FormField hint="הזנה ידנית" label="שיחות מכירה בפועל">
                     <input
                       className="field"
                       inputMode="numeric"
@@ -1240,7 +1282,7 @@ export function BusinessCenter() {
                       value={monthlyForm.actual_sales_calls}
                     />
                   </FormField>
-                  <FormField label="לקוחות חדשים בפועל">
+                  <FormField hint="הזנה ידנית" label="לקוחות חדשים בפועל">
                     <input
                       className="field"
                       inputMode="numeric"
@@ -1253,7 +1295,7 @@ export function BusinessCenter() {
                       value={monthlyForm.actual_new_customers}
                     />
                   </FormField>
-                  <FormField label="תכנים שפורסמו בפועל">
+                  <FormField hint="הזנה ידנית" label="תכנים שפורסמו בפועל">
                     <input
                       className="field"
                       inputMode="numeric"
