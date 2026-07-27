@@ -20,6 +20,7 @@ import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { getSubscriptionAccess, type SubscriptionAccess } from "@/lib/subscriptions";
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
+import { getPhoneDuplicateCandidates } from "@/lib/phone";
 
 const leadSelect =
   "id, closed_at, created_at, deal_probability, last_contact_date, name:full_name, next_action_date, next_action_type, notes, phone, priority, reason_not_closed, source, status, updated_at, user_id, value";
@@ -264,11 +265,11 @@ function parseProbability(value: unknown) {
 }
 
 function isValidPhone(value: string | null) {
-  return !value || /^[0-9+\-()\s]{7,20}$/.test(value);
+  return !value || /^[0-9+\-().\s]{7,20}$/.test(value);
 }
 
 function isValidPublicPhone(value: string | null) {
-  return !value || /^[0-9+\-()\s]{7,30}$/.test(value);
+  return !value || /^[0-9+\-().\s]{7,30}$/.test(value);
 }
 
 function isValidEmail(value: string) {
@@ -414,7 +415,13 @@ async function createAutomatedTask(
   ownerId: string,
   ruleType: AutomationRuleType,
 ) {
-  if (!lead.id || !ownerId || lead.user_id !== ownerId || (await hasAutomationLog(supabase, lead.id, ruleType))) {
+  if (
+    !lead.id ||
+    !ownerId ||
+    lead.user_id !== ownerId ||
+    isFinalLeadStatus(lead.status) ||
+    (await hasAutomationLog(supabase, lead.id, ruleType))
+  ) {
     return { created: false };
   }
 
@@ -467,6 +474,10 @@ async function runTaskAutomations(
   ownerId: string,
   options: { newLead?: boolean } = {},
 ) {
+  if (isFinalLeadStatus(lead.status)) {
+    return undefined;
+  }
+
   const results = [];
 
   if (options.newLead) {
@@ -478,6 +489,33 @@ async function runTaskAutomations(
   }
 
   return results.find((result) => result?.error);
+}
+
+async function completeAutomatedLeadTasks(
+  supabase: LeadWriteClient,
+  leadId: string,
+  ownerId: string,
+) {
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      completed_at: now,
+      status: "הושלמה",
+      updated_at: now,
+    })
+    .eq("linked_lead_id", leadId)
+    .eq("user_id", ownerId)
+    .eq("is_automated", true)
+    .is("deleted_at", null)
+    .neq("status", "הושלמה");
+
+  if (!error) {
+    return undefined;
+  }
+
+  logSupabaseError("leads.final_status_task_sync", error);
+  return { error: "הליד עודכן, אך חלק מהמשימות לא עודכנו." };
 }
 
 async function markInactiveLeadsForReactivation(
@@ -598,12 +636,14 @@ export async function POST(request: Request) {
   const ownerId = context.userId;
   const phone = lead.phone;
   const leadName = lead.name || `WhatsApp ${phone}`;
+  const phoneCandidates = getPhoneDuplicateCandidates(phone);
   const writeSupabase = context.supabase as unknown as LeadWriteClient;
   const { data: existingLead, error: duplicateCheckError } = await writeSupabase
     .from("leads")
     .select(leadSelect)
     .eq("user_id", ownerId)
-    .eq("phone", phone)
+    .in("phone", phoneCandidates)
+    .limit(1)
     .maybeSingle();
 
   if (duplicateCheckError) {
@@ -641,6 +681,7 @@ export async function POST(request: Request) {
       {
         duplicate: true,
         lead: data,
+        result: "updated",
         taskAutomationError: automationError?.error ?? null,
       },
       { status: 200 },
@@ -697,6 +738,7 @@ export async function POST(request: Request) {
   return NextResponse.json(
     {
       lead: data,
+      result: "created",
       taskAutomationError: automationError?.error ?? null,
     },
     { status: 201 },
@@ -814,6 +856,34 @@ export async function PATCH(request: Request) {
     update.closed_at = updatedAt;
   }
 
+  const isFinalStatusUpdate = typeof update.status === "string" && isFinalLeadStatus(update.status);
+
+  if (isFinalStatusUpdate) {
+    update.next_action_date = null;
+    update.next_action_type = null;
+  } else if ("next_action_date" in update || "next_action_type" in update) {
+    const { data: currentLead, error: currentLeadError } = await context.supabase
+      .from("leads")
+      .select("status")
+      .eq("id", id)
+      .eq("user_id", context.user.id)
+      .maybeSingle();
+
+    if (currentLeadError) {
+      logSupabaseError("leads.current_status", currentLeadError);
+      return jsonError(getSupabaseErrorMessage(currentLeadError), 500, getSupabaseErrorMeta(currentLeadError));
+    }
+
+    if (!currentLead) {
+      return jsonError("Lead not found.", 404);
+    }
+
+    if (isFinalLeadStatus(currentLead.status)) {
+      update.next_action_date = null;
+      update.next_action_type = null;
+    }
+  }
+
   if (Object.keys(update).length === 0) {
     return jsonError("No supported fields to update.", 400);
   }
@@ -833,12 +903,17 @@ export async function PATCH(request: Request) {
     return jsonError(getSupabaseErrorMessage(error), 500, getSupabaseErrorMeta(error));
   }
 
-  const automationError = await runTaskAutomations(context.supabase as unknown as LeadWriteClient, data as Lead, context.user.id);
+  const writeClient = context.supabase as unknown as LeadWriteClient;
+  const taskSyncError = isFinalLeadStatus((data as Lead).status)
+    ? await completeAutomatedLeadTasks(writeClient, data.id, context.user.id)
+    : undefined;
+  const automationError = await runTaskAutomations(writeClient, data as Lead, context.user.id);
 
   return NextResponse.json(
     {
       lead: data,
       taskAutomationError: automationError?.error ?? null,
+      taskSyncError: taskSyncError?.error ?? null,
     },
     { status: 200 },
   );

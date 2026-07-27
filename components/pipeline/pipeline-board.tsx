@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Check, GripVertical, MessageCircle, PhoneCall } from "lucide-react";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
@@ -76,35 +76,48 @@ export function PipelineBoard() {
   const [isPending, startTransition] = useTransition();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const mountedRef = useRef(true);
 
   const loadLeads = useCallback(async () => {
     try {
       const response = await fetch("/api/leads", { cache: "no-store" });
       const payload = await response.json().catch(() => ({}));
 
+      if (!mountedRef.current) {
+        return;
+      }
+
       if (!response.ok) {
         setError(payload.error || "לא הצלחנו לטעון את מסלול המכירה.");
         setLeads([]);
+        setLoadFailed(true);
         return;
       }
 
       setLeads(payload.leads ?? []);
       setError("");
+      setLoadFailed(false);
     } catch {
+      if (!mountedRef.current) {
+        return;
+      }
+
       setError("לא הצלחנו לטעון את מסלול המכירה. בדקו את החיבור ונסו שוב.");
       setLeads([]);
+      setLoadFailed(true);
     }
   }, []);
 
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
 
     async function boot() {
       setLoading(true);
       try {
         await loadLeads();
       } finally {
-        if (!active) {
+        if (!mountedRef.current) {
           return;
         }
 
@@ -116,10 +129,24 @@ export function PipelineBoard() {
     const refresh = window.setInterval(loadLeads, 15000);
 
     return () => {
-      active = false;
+      mountedRef.current = false;
       window.clearInterval(refresh);
     };
   }, [loadLeads]);
+
+  async function retryLeadLoad() {
+    setError("");
+    setLoadFailed(false);
+    setLoading(true);
+
+    try {
+      await loadLeads();
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }
 
   const groupedLeads = useMemo(
     () =>
@@ -153,6 +180,12 @@ export function PipelineBoard() {
 
       if (!response.ok) {
         setError(getApiErrorMessage(payload, "לא הצלחנו לעדכן את הליד."));
+        return;
+      }
+
+      if (typeof payload.taskSyncError === "string" && payload.taskSyncError) {
+        setError(payload.taskSyncError);
+        await loadLeads();
         return;
       }
 
@@ -244,6 +277,11 @@ export function PipelineBoard() {
   return (
     <div className="space-y-6">
       <StatusMessage error={error} success={success} />
+      {loadFailed ? (
+        <button className="button-secondary w-full sm:w-auto" onClick={retryLeadLoad} type="button">
+          ניסיון טעינה נוסף
+        </button>
+      ) : null}
 
       {leads.length === 0 ? (
         <section className="panel p-6 text-center">

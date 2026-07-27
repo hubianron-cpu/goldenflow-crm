@@ -1,10 +1,12 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CalendarClock, MessageSquareText, Plus, Search } from "lucide-react";
 import { LeadContentAttribution } from "@/components/business-center/lead-content-attribution";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import {
   getActionCompletedStatus,
   getLeadStatusColor,
@@ -38,9 +40,10 @@ const moneyFormatter = new Intl.NumberFormat("he-IL", {
   maximumFractionDigits: 0,
   style: "currency",
 });
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function isValidPhone(value: string) {
-  return /^[0-9+\-()\s]{7,20}$/.test(value);
+  return /^[0-9+\-().\s]{7,20}$/.test(value);
 }
 
 function formatMoney(value: number) {
@@ -125,6 +128,7 @@ function getUrgencyTime(lead: Lead) {
 }
 
 export function LeadManager() {
+  const router = useRouter();
   const [error, setError] = useState("");
   const [upgradeUrl, setUpgradeUrl] = useState("");
   const [success, setSuccess] = useState("");
@@ -132,33 +136,64 @@ export function LeadManager() {
   const [isPending, startTransition] = useTransition();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("score_desc");
   const [statusFilter, setStatusFilter] = useState("");
   const [leadToDelete, setLeadToDelete] = useState<Lead | null>(null);
+  const [linkedLeadId, setLinkedLeadId] = useState<string | null>(null);
+  const handledLeadParamRef = useRef<string | null>(null);
+  const mountedRef = useRef(true);
+  const deleteDialogRef = useDialogAccessibility(
+    Boolean(leadToDelete),
+    () => setLeadToDelete(null),
+    isPending,
+  );
+  const linkedLeadDialogRef = useDialogAccessibility(
+    Boolean(linkedLeadId && leads.some((lead) => lead.id === linkedLeadId)),
+    closeLinkedLead,
+  );
 
   const loadLeads = useCallback(async () => {
-    const response = await fetch("/api/leads", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
+    try {
+      const response = await fetch("/api/leads", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setError(payload.error || "לא הצלחנו לטעון את הלידים. נסו לרענן את הדף.");
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setError(payload.error || "לא הצלחנו לטעון את הלידים. נסו לרענן את הדף.");
+        setLeads([]);
+        setLoadFailed(true);
+        return;
+      }
+
+      setLeads(payload.leads ?? []);
+      setLoadFailed(false);
+    } catch {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setError("לא הצלחנו לטעון את הלידים. בדקו את החיבור ונסו שוב.");
       setLeads([]);
-      return;
+      setLoadFailed(true);
     }
-
-    setLeads(payload.leads ?? []);
   }, []);
 
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
 
     async function boot() {
       setLoading(true);
-      await loadLeads();
-
-      if (active) {
-        setLoading(false);
+      try {
+        await loadLeads();
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     }
 
@@ -166,10 +201,59 @@ export function LeadManager() {
     const refresh = window.setInterval(loadLeads, 15000);
 
     return () => {
-      active = false;
+      mountedRef.current = false;
       window.clearInterval(refresh);
     };
   }, [loadLeads]);
+
+  async function retryLeadLoad() {
+    setError("");
+    setLoadFailed(false);
+    setLoading(true);
+
+    try {
+      await loadLeads();
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (loading || loadFailed) {
+      return;
+    }
+
+    const leadId = new URLSearchParams(window.location.search).get("lead");
+
+    if (!leadId) {
+      handledLeadParamRef.current = null;
+      return;
+    }
+
+    if (handledLeadParamRef.current === leadId) {
+      return;
+    }
+
+    handledLeadParamRef.current = leadId;
+
+    if (!uuidPattern.test(leadId)) {
+      setError("קישור הליד אינו תקין.");
+      router.replace("/leads", { scroll: false });
+      return;
+    }
+
+    const linkedLead = leads.find((lead) => lead.id === leadId);
+
+    if (!linkedLead) {
+      setError("הליד המקושר לא נמצא או שאינו זמין למשתמש הנוכחי.");
+      router.replace("/leads", { scroll: false });
+      return;
+    }
+
+    setLinkedLeadId(linkedLead.id);
+  }, [leads, loadFailed, loading, router]);
 
   const followUpLeads = useMemo(() => {
     const endOfToday = new Date();
@@ -220,6 +304,10 @@ export function LeadManager() {
         return sort === "created_asc" ? first - second : second - first;
       });
   }, [leads, query, sort, statusFilter]);
+  const linkedLead = useMemo(
+    () => leads.find((lead) => lead.id === linkedLeadId) ?? null,
+    [leads, linkedLeadId],
+  );
 
   function updateField(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -256,6 +344,12 @@ export function LeadManager() {
 
       if (!response.ok) {
         setError(payload.error || "לא הצלחנו לעדכן את הליד. נסו שוב.");
+        return;
+      }
+
+      if (typeof payload.taskSyncError === "string" && payload.taskSyncError) {
+        setError(payload.taskSyncError);
+        await loadLeads();
         return;
       }
 
@@ -319,7 +413,11 @@ export function LeadManager() {
       }
 
       setForm(initialForm);
-      setSuccess("הליד נוסף ונשמר במערכת.");
+      setSuccess(
+        payload.result === "updated"
+          ? "נמצא ליד קיים והפרטים שלו עודכנו."
+          : "הליד נוסף ונשמר במערכת.",
+      );
 
       if (payload.taskAutomationError) {
         setError("הליד נשמר, אך יצירת המשימה האוטומטית נכשלה");
@@ -420,6 +518,11 @@ export function LeadManager() {
     setError("אין מספר טלפון לליד הזה");
   }
 
+  function closeLinkedLead() {
+    setLinkedLeadId(null);
+    router.replace("/leads", { scroll: false });
+  }
+
   function renderWhatsAppCenter(lead: Lead) {
     return (
       <details className="group relative">
@@ -463,6 +566,11 @@ export function LeadManager() {
   return (
     <div className="space-y-6">
       <StatusMessage error={error} success={success} />
+      {loadFailed ? (
+        <button className="button-secondary w-full sm:w-auto" onClick={retryLeadLoad} type="button">
+          ניסיון טעינה נוסף
+        </button>
+      ) : null}
       {error && upgradeUrl ? (
         <a className="button-secondary w-full sm:w-auto" href={upgradeUrl} target="_blank" rel="noopener noreferrer">
           לרכישת מנוי בצורה מאובטחת
@@ -516,12 +624,26 @@ export function LeadManager() {
       </section>
 
       {leadToDelete ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-2xl border border-danger/30 bg-zinc-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)]">
-            <h2 className="text-xl font-semibold text-white">האם אתה בטוח שברצונך למחוק את הליד?</h2>
-            <p className="mt-3 text-sm leading-7 text-zinc-300">הפעולה תמחק את הליד לצמיתות ולא ניתן לשחזר.</p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <div
+            aria-describedby="delete-lead-description"
+            aria-labelledby="delete-lead-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-2xl border border-danger/30 bg-zinc-950 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.55)]"
+            ref={deleteDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h2 className="text-xl font-semibold text-white" id="delete-lead-title">האם אתה בטוח שברצונך למחוק את הליד?</h2>
+            <p className="mt-3 text-sm leading-7 text-zinc-300" id="delete-lead-description">הפעולה תמחק את הליד לצמיתות ולא ניתן לשחזר.</p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <button className="button-secondary" disabled={isPending} onClick={() => setLeadToDelete(null)} type="button">
+              <button
+                aria-label="סגירת חלון מחיקת הליד"
+                className="button-secondary"
+                disabled={isPending}
+                onClick={() => setLeadToDelete(null)}
+                type="button"
+              >
                 בטל
               </button>
               <button
@@ -533,6 +655,60 @@ export function LeadManager() {
                 מחק ליד
               </button>
             </div>
+          </div>
+        </div>
+      ) : null}
+
+      {linkedLead ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/70 px-4 py-6 backdrop-blur-sm">
+          <div
+            aria-describedby="linked-lead-description"
+            aria-labelledby="linked-lead-title"
+            aria-modal="true"
+            className="relative w-full max-w-lg rounded-2xl border border-gold/25 bg-zinc-950 p-5 shadow-[0_24px_80px_rgba(0,0,0,0.55)] sm:p-6"
+            ref={linkedLeadDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <button
+              aria-label="סגירת פרטי הליד"
+              className="absolute left-4 top-4 rounded-lg border border-white/10 px-3 py-1.5 text-zinc-300 transition hover:border-gold/30 hover:text-white"
+              onClick={closeLinkedLead}
+              type="button"
+            >
+              ×
+            </button>
+            <h2 className="pe-12 text-xl font-semibold text-white" id="linked-lead-title">
+              {linkedLead.name}
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400" id="linked-lead-description">
+              פרטי הליד המקושר למשימה
+            </p>
+            <dl className="mt-5 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="text-xs text-zinc-500">טלפון</dt>
+                <dd className="mt-1 text-zinc-200">{linkedLead.phone || "לא הוגדר"}</dd>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="text-xs text-zinc-500">סטטוס</dt>
+                <dd className="mt-1 text-zinc-200">{normalizeLeadStatus(linkedLead.status)}</dd>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="text-xs text-zinc-500">שווי</dt>
+                <dd className="mt-1 text-zinc-200">{formatMoney(linkedLead.value)}</dd>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+                <dt className="text-xs text-zinc-500">מקור</dt>
+                <dd className="mt-1 text-zinc-200">{linkedLead.source || "לא הוגדר"}</dd>
+              </div>
+            </dl>
+            <div className="mt-3 rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs text-zinc-500">הפעולה הבאה</p>
+              <p className="mt-1 text-zinc-200">{formatNextAction(linkedLead)}</p>
+            </div>
+            <button className="button-secondary mt-5 w-full" onClick={closeLinkedLead} type="button">
+              סגירה
+            </button>
           </div>
         </div>
       ) : null}

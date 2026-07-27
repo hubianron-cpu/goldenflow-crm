@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import { completeTask, createCrmTask, postponeTask, reopenTask, softDeleteTask, updateTask } from "@/lib/actions";
 import { normalizeTaskPriority, normalizeTaskStatus, TASK_PRIORITIES, TASK_STATUSES, type TaskPriority, type TaskStatus } from "@/lib/tasks";
 
@@ -206,6 +207,16 @@ export function TaskList({
   const [toast, setToast] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [activeActionId, setActiveActionId] = useState("");
   const [isPending, startTransition] = useTransition();
+  const taskDialogRef = useDialogAccessibility(
+    isModalOpen,
+    closeModal,
+    activeActionId === "save" || isPending,
+  );
+  const deleteDialogRef = useDialogAccessibility(
+    Boolean(taskToDelete),
+    () => setTaskToDelete(null),
+    Boolean(taskToDelete && activeActionId === `delete:${taskToDelete.id}`) || isPending,
+  );
 
   useEffect(() => {
     setLocalTasks(tasks ?? []);
@@ -705,13 +716,21 @@ export function TaskList({
 
       {isModalOpen ? (
         <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/75 px-4 py-8 backdrop-blur-sm">
-          <div className="w-full max-w-2xl rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
+          <div
+            aria-describedby="task-dialog-description"
+            aria-labelledby="task-dialog-title"
+            aria-modal="true"
+            className="w-full max-w-2xl rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
+            ref={taskDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-2xl font-black text-white">{editingTask ? "עריכת משימה" : "משימה חדשה"}</h3>
-                <p className="mt-2 text-sm text-zinc-400">חבר את המשימה לליד, קבע עדיפות ותאריך יעד, ושמור את המכירה בתנועה.</p>
+                <h3 className="text-2xl font-black text-white" id="task-dialog-title">{editingTask ? "עריכת משימה" : "משימה חדשה"}</h3>
+                <p className="mt-2 text-sm text-zinc-400" id="task-dialog-description">חבר את המשימה לליד, קבע עדיפות ותאריך יעד, ושמור את המכירה בתנועה.</p>
               </div>
-              <button className="button-secondary px-4" onClick={closeModal} type="button">
+              <button aria-label="סגירת חלון המשימה" className="button-secondary px-4" onClick={closeModal} type="button">
                 סגור
               </button>
             </div>
@@ -826,15 +845,29 @@ export function TaskList({
       ) : null}
 
       {taskToDelete ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/75 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] border border-danger/25 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
-            <h3 className="text-2xl font-bold text-white">האם למחוק את המשימה?</h3>
-            <p className="mt-3 text-sm leading-6 text-zinc-300">המשימה תוסר מהמערכת ולא תופיע ברשימת המשימות.</p>
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/75 px-4 py-8 backdrop-blur-sm">
+          <div
+            aria-describedby="delete-task-description"
+            aria-labelledby="delete-task-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[28px] border border-danger/25 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
+            ref={deleteDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h3 className="text-2xl font-bold text-white" id="delete-task-title">האם למחוק את המשימה?</h3>
+            <p className="mt-3 text-sm leading-6 text-zinc-300" id="delete-task-description">המשימה תוסר מהמערכת ולא תופיע ברשימת המשימות.</p>
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               <button className="button-danger" disabled={activeActionId === `delete:${taskToDelete.id}` || isPending} onClick={confirmDeleteTask} type="button">
                 מחק משימה
               </button>
-              <button className="button-secondary" disabled={activeActionId === `delete:${taskToDelete.id}` || isPending} onClick={() => setTaskToDelete(null)} type="button">
+              <button
+                aria-label="סגירת חלון מחיקת המשימה"
+                className="button-secondary"
+                disabled={activeActionId === `delete:${taskToDelete.id}` || isPending}
+                onClick={() => setTaskToDelete(null)}
+                type="button"
+              >
                 ביטול
               </button>
             </div>

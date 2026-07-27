@@ -7,7 +7,8 @@ function isPublicPath(pathname: string) {
   return (
     pathname === "/login" ||
     pathname.startsWith("/api/") ||
-    pathname.startsWith("/lead") ||
+    pathname === "/lead" ||
+    pathname.startsWith("/lead/") ||
     pathname.startsWith("/_next/") ||
     pathname === "/favicon.ico"
   );
