@@ -1031,6 +1031,13 @@ export function BusinessCenter() {
               <Library className="h-4 w-4 text-gold-soft" />
               ספריית התוכן
             </Link>
+            <Link
+              className="button-secondary min-h-10 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
+              href="/business-center/insights"
+            >
+              <TrendingUp className="h-4 w-4 text-gold-soft" />
+              סיכומים ומגמות
+            </Link>
           </div>
         </div>
       </section>
