@@ -13,7 +13,9 @@ import {
   type ContentStatus,
   type ContentType,
 } from "@/lib/business-center/content";
+import { isMissingAttributionTable } from "@/lib/business-center/content-attribution";
 import { hasSupabaseEnv } from "@/lib/env";
+import { normalizeLeadStatus } from "@/lib/leads";
 import { requireSubscriptionAccess } from "@/lib/subscription-guard";
 import { createServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
@@ -23,6 +25,13 @@ type ContentResultRow = Omit<ContentRow, "user_id">;
 type ContentInsert = Database["public"]["Tables"]["business_center_content_items"]["Insert"];
 type ContentUpdate = Database["public"]["Tables"]["business_center_content_items"]["Update"];
 type SupabaseServerClient = Awaited<ReturnType<typeof createServerClient>>;
+type AttributionCountRow = {
+  content_item_id: string;
+  lead: { status: string } | Array<{ status: string }> | null;
+};
+type AttributionAvailability =
+  | { available: true }
+  | { available: false; reason: "load_failed" | "not_installed" };
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 50;
@@ -159,6 +168,92 @@ async function findDuplicate(
   return query.maybeSingle();
 }
 
+function getRelatedLeadStatus(value: AttributionCountRow["lead"]) {
+  if (Array.isArray(value)) {
+    return value[0]?.status ?? null;
+  }
+
+  return value?.status ?? null;
+}
+
+async function getAttributionCounts(
+  supabase: SupabaseServerClient,
+  userId: string,
+  contentItemIds: string[],
+) {
+  if (contentItemIds.length === 0) {
+    const probe = await supabase
+      .from("business_center_lead_attributions")
+      .select("id")
+      .eq("user_id", userId)
+      .limit(1);
+
+    if (probe.error) {
+      logDatabaseError("BUSINESS_CENTER_CONTENT_ATTRIBUTION_PROBE_FAILED", probe.error);
+      return {
+        availability: {
+          available: false,
+          reason: isMissingAttributionTable(probe.error)
+            ? "not_installed"
+            : "load_failed",
+        } satisfies AttributionAvailability,
+        counts: new Map<string, { attributedLeads: number; currentWon: number }>(),
+      };
+    }
+
+    return {
+      availability: { available: true } satisfies AttributionAvailability,
+      counts: new Map<string, { attributedLeads: number; currentWon: number }>(),
+    };
+  }
+
+  const result = await supabase
+    .from("business_center_lead_attributions")
+    .select(`
+      content_item_id,
+      lead:leads!business_center_lead_attributions_lead_id_fkey!inner (
+        status
+      )
+    `)
+    .eq("user_id", userId)
+    .in("content_item_id", contentItemIds);
+
+  if (result.error) {
+    logDatabaseError("BUSINESS_CENTER_CONTENT_ATTRIBUTION_COUNTS_FAILED", result.error);
+    return {
+      availability: {
+        available: false,
+        reason: isMissingAttributionTable(result.error)
+          ? "not_installed"
+          : "load_failed",
+      } satisfies AttributionAvailability,
+      counts: new Map<string, { attributedLeads: number; currentWon: number }>(),
+    };
+  }
+
+  const counts = new Map<
+    string,
+    { attributedLeads: number; currentWon: number }
+  >();
+
+  for (const row of (result.data ?? []) as unknown as AttributionCountRow[]) {
+    const current = counts.get(row.content_item_id) ?? {
+      attributedLeads: 0,
+      currentWon: 0,
+    };
+    const status = getRelatedLeadStatus(row.lead);
+    current.attributedLeads += 1;
+    current.currentWon +=
+      status && normalizeLeadStatus(status) === "נסגר בהצלחה" ? 1 : 0;
+    counts.set(row.content_item_id, current);
+  }
+
+  return {
+    availability: { available: true } satisfies AttributionAvailability,
+    counts,
+  };
+}
+
 export async function GET(request: Request) {
   const context = await getContext();
   if ("error" in context) {
@@ -255,6 +350,12 @@ export async function GET(request: Request) {
 
   const total = result.count ?? 0;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const contentItems = result.data ?? [];
+  const attributionCounts = await getAttributionCounts(
+    context.supabase,
+    context.user.id,
+    contentItems.map((item) => item.id),
+  );
 
   return NextResponse.json(
     {
@@ -266,7 +367,19 @@ export async function GET(request: Request) {
         sort,
         status,
       },
-      items: result.data ?? [],
+      items: contentItems.map((item) => {
+        const counts = attributionCounts.counts.get(item.id);
+        return {
+          ...item,
+          lead_attribution: attributionCounts.availability.available
+            ? {
+                attributed_leads: counts?.attributedLeads ?? 0,
+                current_won: counts?.currentWon ?? 0,
+              }
+            : null,
+        };
+      }),
+      leadAttribution: attributionCounts.availability,
       page,
       pageSize,
       total,

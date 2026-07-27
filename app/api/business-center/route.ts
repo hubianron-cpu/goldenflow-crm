@@ -1,6 +1,14 @@
 import { NextResponse } from "next/server";
 import { hasSupabaseEnv } from "@/lib/env";
 import {
+  buildContentAttributionAnalytics,
+  isMissingAttributionTable,
+  type ContentAttributionAnalytics,
+  type ContentAttributionAnalyticsRow,
+  type ContentAttributionOption,
+} from "@/lib/business-center/content-attribution";
+import {
+  getBusinessCenterMonthBounds,
   getBusinessCenterLeadAnalytics,
   type BusinessCenterLeadSource,
 } from "@/lib/business-center/lead-analytics";
@@ -14,6 +22,15 @@ type ProfileInsert = Database["public"]["Tables"]["business_center_social_profil
 type ProfileUpdate = Database["public"]["Tables"]["business_center_social_profiles"]["Update"];
 type SnapshotInsert = Database["public"]["Tables"]["business_center_social_snapshots"]["Insert"];
 type SocialSnapshot = Database["public"]["Tables"]["business_center_social_snapshots"]["Row"];
+type BusinessCenterLeadWithSource = BusinessCenterLeadSource & { source: string };
+type AttributionQueryRow = {
+  content_item:
+    | Omit<ContentAttributionOption, "status">
+    | Array<Omit<ContentAttributionOption, "status">>
+    | null;
+  content_item_id: string;
+  lead_id: string;
+};
 
 const platforms = ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Other"] as const;
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])-01$/;
@@ -55,6 +72,64 @@ function databaseErrorResponse(error: { code?: string; message?: string }, event
   }
 
   return jsonError("לא הצלחנו להשלים את הפעולה במרכז העסק. נסו שוב.", 500);
+}
+
+function getRelatedContent(
+  value: AttributionQueryRow["content_item"],
+): Omit<ContentAttributionOption, "status"> | null {
+  if (Array.isArray(value)) {
+    return value[0] ?? null;
+  }
+
+  return value;
+}
+
+async function getContentAttributionAnalytics(
+  supabase: Awaited<ReturnType<typeof createServerClient>>,
+  userId: string,
+  leads: BusinessCenterLeadWithSource[],
+  monthStart: string,
+): Promise<ContentAttributionAnalytics> {
+  const bounds = getBusinessCenterMonthBounds(monthStart);
+  const result = await supabase
+    .from("business_center_lead_attributions")
+    .select(`
+      lead_id,
+      content_item_id,
+      lead:leads!business_center_lead_attributions_lead_id_fkey!inner (
+        created_at
+      ),
+      content_item:business_center_content_items!business_center_lead_attributions_content_item_id_fkey (
+        id,
+        title,
+        platform,
+        content_type,
+        published_on
+      )
+    `)
+    .eq("user_id", userId)
+    .gte("lead.created_at", new Date(bounds.currentStart).toISOString())
+    .lt("lead.created_at", new Date(bounds.currentEnd).toISOString());
+
+  if (result.error) {
+    logDatabaseError("BUSINESS_CENTER_CONTENT_ATTRIBUTION_LOAD_FAILED", result.error);
+    return {
+      available: false,
+      reason: isMissingAttributionTable(result.error)
+        ? "not_installed"
+        : "load_failed",
+    };
+  }
+
+  const rows = ((result.data ?? []) as unknown as AttributionQueryRow[]).map(
+    (row): ContentAttributionAnalyticsRow => ({
+      content_item: getRelatedContent(row.content_item),
+      content_item_id: row.content_item_id,
+      lead_id: row.lead_id,
+    }),
+  );
+
+  return buildContentAttributionAnalytics(leads, rows, monthStart);
 }
 
 async function getContext() {
@@ -372,7 +447,7 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false }),
     context.supabase
       .from("leads")
-      .select("id, created_at, full_name, next_action_date, status, value")
+      .select("id, created_at, full_name, next_action_date, source, status, value")
       .eq("user_id", context.user.id),
   ]);
 
@@ -423,14 +498,22 @@ export async function GET(request: Request) {
       thirty_day_snapshot: findThirtyDayBaseline(relevantSnapshots, latestSnapshot),
     };
   });
+  const leads = (leadsResult.data ?? []) as BusinessCenterLeadWithSource[];
+  const contentAttribution = await getContentAttributionAnalytics(
+    context.supabase,
+    context.user.id,
+    leads,
+    monthStart,
+  );
 
   return NextResponse.json(
     {
+      content_attribution: contentAttribution,
       monthly: monthlyResult.data ?? null,
       previous_monthly: previousResult.data ?? null,
       profiles: profilesWithSnapshots,
       lead_analytics: getBusinessCenterLeadAnalytics(
-        (leadsResult.data ?? []) as BusinessCenterLeadSource[],
+        leads,
         monthStart,
       ),
     },
