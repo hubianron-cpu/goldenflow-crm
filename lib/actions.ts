@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { hasSupabaseEnv } from "@/lib/env";
 import { requireSubscriptionAccess, SUBSCRIPTION_REQUIRED_MESSAGE } from "@/lib/subscription-guard";
 import { createServerClient } from "@/lib/supabase/server";
+import { isFinalLeadStatus } from "@/lib/leads";
 import { normalizeTaskPriority, normalizeTaskStatus } from "@/lib/tasks";
 
 type SupabaseError = {
@@ -23,6 +24,10 @@ type TaskPayload = {
   status?: string | null;
   title?: string | null;
 };
+
+const uuidPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function encodeMessage(message: string) {
   return encodeURIComponent(message);
@@ -69,6 +74,15 @@ function sanitizeTaskPayload(payload: TaskPayload) {
 function revalidateTaskPaths() {
   revalidatePath("/dashboard");
   revalidatePath("/tasks");
+}
+
+function isValidDateValue(value: string) {
+  if (!datePattern.test(value)) {
+    return false;
+  }
+
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 export async function getCurrentUser() {
@@ -252,6 +266,126 @@ export async function createCrmTask(payload: TaskPayload) {
 
   revalidateTaskPaths();
   return { data, success: "המשימה נשמרה" };
+}
+
+export async function scheduleLeadCall(leadId: string, dueDate: string) {
+  const { supabase, user } = await getCurrentUser();
+  const subscription = await requireSubscriptionAccess(user.id);
+
+  if (!subscription.ok) {
+    return { error: subscription.error };
+  }
+
+  if (!uuidPattern.test(leadId) || !isValidDateValue(dueDate)) {
+    return { error: "יש לבחור ליד ותאריך שיחה תקינים." };
+  }
+
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select("id, full_name, status, next_action_date, next_action_type")
+    .eq("id", leadId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (leadError) {
+    return { error: getErrorMessage(leadError) || "לא ניתן לטעון את הליד." };
+  }
+
+  if (!lead) {
+    return { error: "הליד לא נמצא." };
+  }
+
+  if (isFinalLeadStatus(lead.status)) {
+    return { error: "לא ניתן לקבוע שיחה לליד שנמצא בסטטוס סופי." };
+  }
+
+  const title = `שיחת מכירה עם ${lead.full_name}`;
+  const { data: existingTask, error: existingTaskError } = await supabase
+    .from("tasks")
+    .select("id")
+    .eq("linked_lead_id", lead.id)
+    .eq("user_id", user.id)
+    .eq("is_automated", true)
+    .like("title", "שיחת מכירה עם %")
+    .is("deleted_at", null)
+    .in("status", ["פתוחה", "בתהליך", "נדחתה"])
+    .limit(1)
+    .maybeSingle();
+
+  if (existingTaskError) {
+    return { error: getErrorMessage(existingTaskError) || "לא ניתן לבדוק אם כבר נקבעה שיחה." };
+  }
+
+  const nextActionDate = `${dueDate}T09:00:00.000Z`;
+  const { error: leadUpdateError } = await supabase
+    .from("leads")
+    .update({
+      next_action_date: nextActionDate,
+      next_action_type: "call",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", lead.id)
+    .eq("user_id", user.id);
+
+  if (leadUpdateError) {
+    return { error: getErrorMessage(leadUpdateError) || "לא ניתן לשמור את מועד השיחה." };
+  }
+
+  const taskPayload = {
+    assigned_to: user.id,
+    description: `שיחת מכירה מתוכננת עם ${lead.full_name}`,
+    due_date: dueDate,
+    is_automated: true,
+    linked_lead_id: lead.id,
+    priority: "גבוהה",
+    status: "פתוחה",
+    title,
+    updated_at: new Date().toISOString(),
+    user_id: user.id,
+  };
+  const taskResult = existingTask
+    ? await supabase
+        .from("tasks")
+        .update(taskPayload)
+        .eq("id", existingTask.id)
+        .eq("user_id", user.id)
+        .select("id")
+        .single()
+    : await supabase.from("tasks").insert(taskPayload).select("id").single();
+
+  if (taskResult.error) {
+    const { error: rollbackError } = await supabase
+      .from("leads")
+      .update({
+        next_action_date: lead.next_action_date,
+        next_action_type: lead.next_action_type,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", lead.id)
+      .eq("user_id", user.id);
+
+    if (rollbackError) {
+      console.error("SCHEDULE_LEAD_CALL_ROLLBACK_FAILED", {
+        code: rollbackError.code ?? null,
+        message: rollbackError.message ?? null,
+      });
+    }
+
+    return { error: getErrorMessage(taskResult.error) || "לא ניתן ליצור את משימת השיחה." };
+  }
+
+  revalidateTaskPaths();
+  revalidatePath("/leads");
+  revalidatePath("/pipeline");
+
+  return {
+    data: {
+      dueDate,
+      leadId: lead.id,
+      taskId: taskResult.data.id,
+    },
+    success: existingTask ? "מועד השיחה עודכן." : "השיחה נקבעה והמשימה נשמרה.",
+  };
 }
 
 export async function updateTask(taskId: string, payload: TaskPayload) {

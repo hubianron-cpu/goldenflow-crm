@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
+import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
+import { scheduleLeadCall } from "@/lib/actions";
 import {
   getActionCompletedStatus,
   getDaysSinceLastActivity,
@@ -32,8 +34,6 @@ import {
 } from "@/lib/leads";
 
 const CLOSABLE_STAGES: string[] = ["הצעה נשלחה", "ממתין לתגובה"];
-const CONTACTED_STAGES: string[] = LEAD_STATUSES.filter((status) => status.value !== "לידים חדשים").map((status) => status.value);
-const MEETING_STAGES: string[] = ["בתהליך שיחה", "הצעה נשלחה", "ממתין לתגובה"];
 const CLOSED_STAGE = "נסגר בהצלחה";
 const DEFAULT_DAILY_TARGET = 3000;
 const MIN_DAILY_TARGET = 500;
@@ -277,6 +277,13 @@ function isValidLeadForUpdate(lead: Lead) {
   return Boolean(lead.id && Number.isFinite(Number(lead.value || 0)));
 }
 
+function getLocalDateValue(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function DashboardMetrics() {
   const router = useRouter();
   const [error, setError] = useState("");
@@ -296,13 +303,33 @@ export function DashboardMetrics() {
   const [targetDraft, setTargetDraft] = useState(String(DEFAULT_DAILY_TARGET));
   const [targetModalOpen, setTargetModalOpen] = useState(false);
   const [savingTarget, setSavingTarget] = useState(false);
+  const [callLead, setCallLead] = useState<Lead | null>(null);
+  const [callDate, setCallDate] = useState(getLocalDateValue());
+  const [savingCall, setSavingCall] = useState(false);
   const [checklist, setChecklist] = useState<Record<string, boolean>>({});
   const [success, setSuccess] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(true);
+  const [leadsLoadFailed, setLeadsLoadFailed] = useState(false);
+  const [targetLoadFailed, setTargetLoadFailed] = useState(false);
   const [updatingLeadId, setUpdatingLeadId] = useState<string | null>(null);
   const [lastUserActionAt, setLastUserActionAt] = useState(Date.now());
   const [showIdleWarning, setShowIdleWarning] = useState(false);
+  const mountedRef = useRef(true);
+  const savingCallRef = useRef(false);
+  const targetDialogRef = useDialogAccessibility(
+    targetModalOpen,
+    () => {
+      setTargetDraft(String(dailyTarget));
+      setTargetModalOpen(false);
+    },
+    savingTarget,
+  );
+  const callDialogRef = useDialogAccessibility(
+    Boolean(callLead),
+    () => setCallLead(null),
+    savingCall,
+  );
 
   function markUserAction() {
     setLastUserActionAt(Date.now());
@@ -310,46 +337,81 @@ export function DashboardMetrics() {
   }
 
   const loadLeads = useCallback(async () => {
-    const response = await fetch("/api/leads", { cache: "no-store" });
-    const payload = await response.json().catch(() => ({}));
+    try {
+      const response = await fetch("/api/leads", { cache: "no-store" });
+      const payload = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      setError(payload.error || "לא הצלחנו לטעון את נתוני הדאשבורד.");
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setError(payload.error || "לא הצלחנו לטעון את נתוני הדאשבורד.");
+        setLeads([]);
+        setLeadsLoadFailed(true);
+        setUpdatingLeadId(null);
+        return;
+      }
+
+      setLeads(payload.leads ?? []);
+      setLeadsLoadFailed(false);
+    } catch {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setError("לא הצלחנו לטעון את נתוני הדאשבורד. בדקו את החיבור ונסו שוב.");
       setLeads([]);
+      setLeadsLoadFailed(true);
       setUpdatingLeadId(null);
-      return;
     }
-
-    setLeads(payload.leads ?? []);
-    setError("");
   }, []);
 
   const loadDailyTarget = useCallback(async () => {
-    const response = await fetch("/api/user-settings", { cache: "no-store" });
-    const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
+    try {
+      const response = await fetch("/api/user-settings", { cache: "no-store" });
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown>;
 
-    if (!response.ok) {
-      setError(getApiErrorMessage(payload, "לא הצלחנו לטעון את היעד היומי."));
+      if (!mountedRef.current) {
+        return;
+      }
+
+      if (!response.ok) {
+        setError(getApiErrorMessage(payload, "לא הצלחנו לטעון את היעד היומי."));
+        setDailyTarget(DEFAULT_DAILY_TARGET);
+        setTargetDraft(String(DEFAULT_DAILY_TARGET));
+        setTargetLoadFailed(true);
+        return;
+      }
+
+      const loadedTarget = Number(payload.daily_target ?? DEFAULT_DAILY_TARGET);
+      const safeTarget = Number.isFinite(loadedTarget) && loadedTarget > 0 ? loadedTarget : DEFAULT_DAILY_TARGET;
+      setDailyTarget(safeTarget);
+      setTargetDraft(String(safeTarget));
+      setTargetLoadFailed(false);
+    } catch {
+      if (!mountedRef.current) {
+        return;
+      }
+
+      setError("לא הצלחנו לטעון את היעד היומי. בדקו את החיבור ונסו שוב.");
       setDailyTarget(DEFAULT_DAILY_TARGET);
       setTargetDraft(String(DEFAULT_DAILY_TARGET));
-      return;
+      setTargetLoadFailed(true);
     }
-
-    const loadedTarget = Number(payload.daily_target ?? DEFAULT_DAILY_TARGET);
-    const safeTarget = Number.isFinite(loadedTarget) && loadedTarget > 0 ? loadedTarget : DEFAULT_DAILY_TARGET;
-    setDailyTarget(safeTarget);
-    setTargetDraft(String(safeTarget));
   }, []);
 
   useEffect(() => {
-    let active = true;
+    mountedRef.current = true;
 
     async function boot() {
       setLoading(true);
-      await Promise.all([loadLeads(), loadDailyTarget()]);
-
-      if (active) {
-        setLoading(false);
+      try {
+        await Promise.all([loadLeads(), loadDailyTarget()]);
+      } finally {
+        if (mountedRef.current) {
+          setLoading(false);
+        }
       }
     }
 
@@ -357,10 +419,25 @@ export function DashboardMetrics() {
     const refresh = window.setInterval(loadLeads, 15000);
 
     return () => {
-      active = false;
+      mountedRef.current = false;
       window.clearInterval(refresh);
     };
   }, [loadDailyTarget, loadLeads]);
+
+  async function retryDashboardLoad() {
+    setError("");
+    setLeadsLoadFailed(false);
+    setTargetLoadFailed(false);
+    setLoading(true);
+
+    try {
+      await Promise.all([loadLeads(), loadDailyTarget()]);
+    } finally {
+      if (mountedRef.current) {
+        setLoading(false);
+      }
+    }
+  }
 
   useEffect(() => {
     const idleCheck = window.setInterval(() => {
@@ -373,6 +450,9 @@ export function DashboardMetrics() {
   const metrics = useMemo(() => {
     const total = leads.length;
     const totalValue = leads.reduce((sum, lead) => sum + (lead.value || 0), 0);
+    const activePipelineValue = leads
+      .filter((lead) => !isFinalLeadStatus(lead.status))
+      .reduce((sum, lead) => sum + (lead.value || 0), 0);
     const active = leads.filter((lead) => !isFinalLeadStatus(lead.status)).length;
     const moneyAtRisk = leads
       .filter((lead) => !isFinalLeadStatus(lead.status) && (lead.value || 0) > 0 && getDaysSinceActivity(lead) > 3)
@@ -380,8 +460,9 @@ export function DashboardMetrics() {
     const closableRevenue = leads
       .filter((lead) => CLOSABLE_STAGES.includes(normalizeLeadStatus(lead.status)))
       .reduce((sum, lead) => sum + (lead.value || 0), 0);
-    const contacted = leads.filter((lead) => CONTACTED_STAGES.includes(normalizeLeadStatus(lead.status))).length;
-    const meetings = leads.filter((lead) => MEETING_STAGES.includes(normalizeLeadStatus(lead.status))).length;
+    const contacted = leads.filter((lead) => normalizeLeadStatus(lead.status) === LEAD_STATUSES[1].value).length;
+    const meetings = leads.filter((lead) => normalizeLeadStatus(lead.status) === LEAD_STATUSES[2].value).length;
+    const proposals = leads.filter((lead) => normalizeLeadStatus(lead.status) === LEAD_STATUSES[3].value).length;
     const closed = leads.filter((lead) => normalizeLeadStatus(lead.status) === CLOSED_STAGE).length;
     const todayKey = new Date().toDateString();
     const closedTodayRevenue = leads
@@ -402,7 +483,7 @@ export function DashboardMetrics() {
     });
     const monthlyRevenue = monthlyClosedLeads.reduce((sum, lead) => sum + (lead.value || 0), 0);
     const monthlyClosedCount = monthlyClosedLeads.length;
-    const conversion = total ? Math.round((closed / total) * 100) : 0;
+    const proposalShare = total ? Math.round((proposals / total) * 100) : 0;
     const valueByStage = LEAD_STATUSES.map((status) => {
       const stageLeads = leads.filter((lead) => normalizeLeadStatus(lead.status) === status.value);
 
@@ -464,12 +545,12 @@ export function DashboardMetrics() {
     return {
       actionLeads,
       active,
+      activePipelineValue,
       closableRevenue,
       closed,
       closedTodayRevenue,
       closeableLeads,
       contacted,
-      conversion,
       dailyClosing,
       dailyLeads,
       dailyRevenuePotential,
@@ -477,6 +558,8 @@ export function DashboardMetrics() {
       moneyAtRisk,
       monthlyClosedCount,
       monthlyRevenue,
+      proposals,
+      proposalShare,
       reactivationLeads,
       recoverableMoney,
       stuckLeads,
@@ -766,6 +849,42 @@ export function DashboardMetrics() {
     await updateLeadAction(leadId, "tomorrow");
   }
 
+  function openScheduleCall(lead: Lead) {
+    setError("");
+    setSuccess("");
+    setCallDate(getLocalDateValue());
+    setCallLead(lead);
+  }
+
+  async function saveScheduledCall() {
+    if (!callLead || savingCallRef.current) {
+      return;
+    }
+
+    savingCallRef.current = true;
+    setSavingCall(true);
+    setError("");
+    setSuccess("");
+
+    try {
+      const result = await scheduleLeadCall(callLead.id, callDate);
+
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+
+      setSuccess(result.success ?? "השיחה נקבעה.");
+      setCallLead(null);
+      await loadLeads();
+    } catch {
+      setError("לא ניתן לקבוע את השיחה כרגע. בדקו את החיבור ונסו שוב.");
+    } finally {
+      savingCallRef.current = false;
+      setSavingCall(false);
+    }
+  }
+
   async function closeDeal(lead: Lead) {
     markUserAction();
     setError("");
@@ -801,6 +920,12 @@ export function DashboardMetrics() {
     if (payload.lead) {
       setLeads((current) => current.map((item) => (item.id === payload.lead?.id ? payload.lead : item)));
     }
+    if (typeof payload.taskSyncError === "string" && payload.taskSyncError) {
+      setError(payload.taskSyncError);
+      setActionImpact("");
+      await loadLeads();
+      return;
+    }
     setActionImpact(`✔ נסגר! התקדמת ליעד · +${formatMoney(lead.value || 0)}`);
     setHandledLeadIds((current) => [...new Set([...current, lead.id])]);
     setHandledToday((current) => current + 1);
@@ -818,20 +943,32 @@ export function DashboardMetrics() {
     return <LoadingCard label="טוען דאשבורד..." />;
   }
 
-  const highestMoneyKpi = Math.max(metrics.totalValue, metrics.closableRevenue, metrics.monthlyRevenue, metrics.moneyAtRisk);
+  const highestMoneyKpi = Math.max(metrics.activePipelineValue, metrics.closableRevenue, metrics.monthlyRevenue, metrics.moneyAtRisk);
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-clip">
       <StatusMessage error={error} success={success} />
+      {leadsLoadFailed || targetLoadFailed ? (
+        <button className="button-secondary w-full sm:w-auto" onClick={retryDashboardLoad} type="button">
+          ניסיון טעינה נוסף
+        </button>
+      ) : null}
       {actionImpact ? (
         <div className="number-rise rounded-2xl border border-gold/25 bg-gold/10 p-4 text-sm font-semibold text-gold-soft shadow-[0_0_35px_rgba(201,162,39,0.12)]">
           {actionImpact}
         </div>
       ) : null}
       {targetModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]">
-            <h3 className="text-xl font-semibold text-white">מה היעד היומי שלך?</h3>
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 px-4 py-8 backdrop-blur-sm">
+          <div
+            aria-labelledby="daily-target-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
+            ref={targetDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h3 className="text-xl font-semibold text-white" id="daily-target-title">מה היעד היומי שלך?</h3>
             <label className="mt-5 block text-sm text-zinc-300">
               מה היעד היומי שלך?
               <input
@@ -855,6 +992,50 @@ export function DashboardMetrics() {
                   setTargetDraft(String(dailyTarget));
                   setTargetModalOpen(false);
                 }}
+                aria-label="סגירת חלון היעד היומי"
+                type="button"
+              >
+                ביטול
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+      {callLead ? (
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/70 px-4 py-8 backdrop-blur-sm">
+          <div
+            aria-describedby="schedule-call-description"
+            aria-labelledby="schedule-call-title"
+            aria-modal="true"
+            className="w-full max-w-md rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
+            ref={callDialogRef}
+            role="dialog"
+            tabIndex={-1}
+          >
+            <h3 className="text-xl font-semibold text-white" id="schedule-call-title">קביעת שיחה עם {callLead.name}</h3>
+            <p className="mt-2 text-sm leading-6 text-zinc-400" id="schedule-call-description">
+              השיחה תישמר כמשימה ותעודכן כפעולה הבאה של הליד, בלי לשנות את שלב המכירה.
+            </p>
+            <label className="mt-5 block text-sm text-zinc-300">
+              תאריך השיחה
+              <input
+                className="field mt-2"
+                min={getLocalDateValue()}
+                onChange={(event) => setCallDate(event.target.value)}
+                required
+                type="date"
+                value={callDate}
+              />
+            </label>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <button className="button-primary" disabled={savingCall || !callDate} onClick={saveScheduledCall} type="button">
+                {savingCall ? "שומר..." : "שמירת שיחה"}
+              </button>
+              <button
+                aria-label="סגירת חלון קביעת השיחה"
+                className="button-secondary"
+                disabled={savingCall}
+                onClick={() => setCallLead(null)}
                 type="button"
               >
                 ביטול
@@ -1470,7 +1651,12 @@ export function DashboardMetrics() {
                           <button className="button-secondary min-h-9 min-w-[72px] flex-1 px-2 py-1.5 text-xs active:scale-[0.97]" disabled={updatingLeadId === lead.id} onClick={() => handleLeadHandled(lead.id)} title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא" type="button">
                             ✔ טיפלתי
                           </button>
-                          <button className="button-secondary min-h-9 min-w-[82px] flex-1 px-2 py-1.5 text-xs active:scale-[0.97]" disabled={updatingLeadId === lead.id} onClick={() => handleLeadHandled(lead.id)} type="button">
+                          <button
+                            className="button-secondary min-h-9 min-w-[82px] flex-1 px-2 py-1.5 text-xs active:scale-[0.97]"
+                            disabled={updatingLeadId === lead.id}
+                            onClick={() => openScheduleCall(lead)}
+                            type="button"
+                          >
                             קבע שיחה
                           </button>
                           <button
@@ -1538,18 +1724,18 @@ export function DashboardMetrics() {
           {
             accent: "from-gold/20 to-gold-soft/5",
             icon: BadgeDollarSign,
-            label: "פוטנציאל הכנסות",
-            meta: "שווי כולל של כל מסלול המכירה",
-            rawValue: metrics.totalValue,
-            sublabel: metrics.totalValue > 0 ? "הכסף שנמצא במערכת" : "עוד אין מסלול מכירה",
+            label: "פוטנציאל מכירה פעיל",
+            meta: "סכום שווי הלידים שעדיין נמצאים בתהליך המכירה",
+            rawValue: metrics.activePipelineValue,
+            sublabel: metrics.activePipelineValue > 0 ? "לידים פתוחים בלבד" : "עוד אין פוטנציאל מכירה פעיל",
             tone: "text-gold",
-            value: formatMoney(metrics.totalValue),
+            value: formatMoney(metrics.activePipelineValue),
           },
           {
             accent: "from-success/20 to-gold/5",
             icon: Target,
-            label: "הכנסה השבוע",
-            meta: "פגישות והצעות מחיר שאפשר לסגור",
+            label: "פוטנציאל קרוב לסגירה",
+            meta: "סכום הפוטנציאל של לידים שנמצאים בשלבי מכירה מתקדמים",
             rawValue: metrics.closableRevenue,
             sublabel: metrics.closableRevenue > 0 ? "קרוב לסגירה" : "צריך לקדם לפגישה",
             tone: "text-gold",
@@ -1558,8 +1744,8 @@ export function DashboardMetrics() {
           {
             accent: "from-gold/20 to-gold-soft/5",
             icon: BadgeDollarSign,
-            label: "הכנסה חודשית",
-            meta: "עסקאות שנסגרו החודש",
+            label: "שווי עסקאות שנסגרו החודש",
+            meta: "סכום שווי הלידים שנסגרו בהצלחה החודש",
             rawValue: metrics.monthlyRevenue,
             sublabel: `${metrics.monthlyClosedCount} עסקאות שנסגרו החודש`,
             tone: "text-gold",
@@ -1971,20 +2157,24 @@ export function DashboardMetrics() {
       <section className="panel p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-lg font-semibold">משפך המרה</h3>
-            <p className="mt-1 text-sm text-zinc-400">מספרים אמיתיים ממסלול המכירה: סה״כ → קשר → פגישות → הצעה.</p>
+            <h3 className="text-lg font-semibold">מצב הלידים לפי שלב</h3>
+            <p className="mt-1 text-sm text-zinc-400">תמונת מצב נוכחית לפי הסטטוס שבו נמצא כל ליד כעת, ללא הנחה על היסטוריית השלבים.</p>
           </div>
           <BadgeDollarSign className="h-5 w-5 text-gold" />
         </div>
-        <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-center">
+        <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-center">
           {[
             ["סה״כ", metrics.total],
-            ["נוצר קשר", metrics.contacted],
-            ["פגישות", metrics.meetings],
-            ["הצעות", metrics.closed],
+            ["יצירת קשר", metrics.contacted],
+            ["בתהליך שיחה", metrics.meetings],
+            ["הצעה נשלחה", metrics.proposals],
+            ["נסגרו בהצלחה", metrics.closed],
           ].map(([label, value], index, funnel) => {
             const numericValue = Number(value);
-            const highlighted = numericValue > 0 && (index === funnel.length - 1 || numericValue === Math.max(metrics.total, metrics.contacted, metrics.meetings, metrics.closed));
+            const highlighted =
+              numericValue > 0 &&
+              (index === funnel.length - 1 ||
+                numericValue === Math.max(metrics.total, metrics.contacted, metrics.meetings, metrics.proposals, metrics.closed));
 
             return (
               <div className="contents" key={label}>
@@ -2005,7 +2195,9 @@ export function DashboardMetrics() {
             );
           })}
         </div>
-        <p className="mt-4 text-sm text-zinc-400">יחס התקדמות להצעה: {metrics.conversion}%</p>
+        <p className="mt-4 text-sm text-zinc-400">
+          שיעור הלידים שנמצאים כעת בשלב הצעה מתוך כלל הלידים: {metrics.proposalShare}%
+        </p>
       </section>
         </>
       ) : null}
