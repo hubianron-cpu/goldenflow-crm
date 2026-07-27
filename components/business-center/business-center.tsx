@@ -19,8 +19,10 @@ import {
   TrendingUp,
   UsersRound,
 } from "lucide-react";
+import { ContentLeadPerformance } from "@/components/business-center/content-lead-performance";
 import { BusinessCenterLeadIntelligence } from "@/components/business-center/lead-intelligence";
 import { StatusMessage } from "@/components/status-message";
+import type { ContentAttributionAnalytics } from "@/lib/business-center/content-attribution";
 import type { BusinessCenterLeadAnalytics } from "@/lib/business-center/lead-analytics";
 import type { Database } from "@/types/database";
 
@@ -35,6 +37,7 @@ type ProfileWithSnapshots = SocialProfile & {
 };
 
 type BusinessCenterResponse = {
+  content_attribution: ContentAttributionAnalytics;
   lead_analytics: BusinessCenterLeadAnalytics;
   monthly: MonthlyMetrics | null;
   previous_monthly: MonthlyMetrics | null;
@@ -1120,6 +1123,12 @@ export function BusinessCenter() {
           <BusinessCenterLeadIntelligence
             analytics={data.lead_analytics}
             monthLabel={formatMonth(selectedMonth)}
+          />
+
+          <ContentLeadPerformance
+            analytics={data.content_attribution}
+            monthLabel={formatMonth(selectedMonth)}
+            onRetry={() => void loadBusinessCenter(selectedMonth)}
           />
 
           <section className="panel p-5 sm:p-7" aria-labelledby="business-insights-title">

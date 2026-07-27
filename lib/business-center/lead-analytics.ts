@@ -133,7 +133,7 @@ function zonedStartOfDay(year: number, month: number, day: number) {
   return candidate;
 }
 
-function getMonthBounds(monthStart: string) {
+export function getBusinessCenterMonthBounds(monthStart: string) {
   const [year, month] = monthStart.split("-").map(Number);
   const nextMonth = month === 12 ? 1 : month + 1;
   const nextYear = month === 12 ? year + 1 : year;
@@ -284,7 +284,7 @@ export function getBusinessCenterLeadAnalytics(
   monthStart: string,
   now = new Date(),
 ): BusinessCenterLeadAnalytics {
-  const monthBounds = getMonthBounds(monthStart);
+  const monthBounds = getBusinessCenterMonthBounds(monthStart);
   const todayBounds = getTodayBounds(now);
   const monthlyLeads = leads.filter((lead) => {
     const createdAt = new Date(lead.created_at).getTime();

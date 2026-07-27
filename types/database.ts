@@ -447,6 +447,51 @@ export type Database = {
         };
         Relationships: [];
       };
+      business_center_lead_attributions: {
+        Row: {
+          attribution_notes: string | null;
+          content_item_id: string;
+          created_at: string;
+          id: string;
+          lead_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          attribution_notes?: string | null;
+          content_item_id: string;
+          created_at?: string;
+          id?: string;
+          lead_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          attribution_notes?: string | null;
+          content_item_id?: string;
+          created_at?: string;
+          id?: string;
+          lead_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "business_center_lead_attributions_content_item_id_fkey";
+            columns: ["content_item_id"];
+            isOneToOne: false;
+            referencedRelation: "business_center_content_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "business_center_lead_attributions_lead_id_fkey";
+            columns: ["lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       business_center_social_profiles: {
         Row: {
           created_at: string;

@@ -39,7 +39,12 @@ import type { Database } from "@/types/database";
 type ContentItem = Omit<
   Database["public"]["Tables"]["business_center_content_items"]["Row"],
   "user_id"
->;
+> & {
+  lead_attribution: {
+    attributed_leads: number;
+    current_won: number;
+  } | null;
+};
 
 type ContentForm = {
   campaign_source: string;
@@ -80,6 +85,9 @@ type ContentListResponse = {
     status: ContentFilters["status"];
   };
   items: ContentItem[];
+  leadAttribution:
+    | { available: true }
+    | { available: false; reason: "load_failed" | "not_installed" };
   page: number;
   pageSize: number;
   total: number;
@@ -290,6 +298,8 @@ export function ContentLibrary() {
   const [searchInput, setSearchInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [missingTable, setMissingTable] = useState(false);
+  const [attributionAvailability, setAttributionAvailability] =
+    useState<ContentListResponse["leadAttribution"]>({ available: true });
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -330,6 +340,7 @@ export function ContentLibrary() {
       .then((payload) => {
         setTotal(payload.total);
         setTotalPages(payload.totalPages);
+        setAttributionAvailability(payload.leadAttribution);
         setMissingTable(false);
         if (page > payload.totalPages) {
           setPage(payload.totalPages);
@@ -440,6 +451,7 @@ export function ContentLibrary() {
       const payload = await fetchContentList(filters, page, pageSize);
       setTotal(payload.total);
       setTotalPages(payload.totalPages);
+      setAttributionAvailability(payload.leadAttribution);
       setMissingTable(false);
       if (page > payload.totalPages) {
         setPage(payload.totalPages);
@@ -797,6 +809,15 @@ export function ContentLibrary() {
             ) : null}
           </section>
 
+          {!attributionAvailability.available ? (
+            <section className="rounded-2xl border border-gold/20 bg-gold/[0.05] p-4 text-sm text-zinc-300">
+              {attributionAvailability.reason === "not_installed"
+                ? "שיוך תוכן ללידים עדיין לא הופעל במסד הנתונים."
+                : "לא הצלחנו לטעון כרגע את ספירות הלידים לתוכן."}
+              {" "}ספריית התוכן ממשיכה לפעול כרגיל.
+            </section>
+          ) : null}
+
           {loading ? (
             <section className="panel p-8 text-center text-sm text-zinc-400">
               טוען את ספריית התוכן...
@@ -884,6 +905,28 @@ export function ContentLibrary() {
                               </p>
                             </div>
                           ))}
+                        </div>
+
+                        <div className="mt-3 rounded-xl border border-gold/15 bg-gold/[0.035] p-3">
+                          <p className="text-[11px] font-bold text-gold-soft">כל הזמנים</p>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-lg border border-white/[0.07] bg-black/15 p-2.5">
+                              <p className="text-[11px] font-bold text-zinc-500">לידים משויכים</p>
+                              <p className="mt-1 text-sm font-black text-white">
+                                {item.lead_attribution
+                                  ? formatMetric(item.lead_attribution.attributed_leads)
+                                  : "—"}
+                              </p>
+                            </div>
+                            <div className="rounded-lg border border-white/[0.07] bg-black/15 p-2.5">
+                              <p className="text-[11px] font-bold text-zinc-500">נסגרו בהצלחה כרגע</p>
+                              <p className="mt-1 text-sm font-black text-white">
+                                {item.lead_attribution
+                                  ? formatMetric(item.lead_attribution.current_won)
+                                  : "—"}
+                              </p>
+                            </div>
+                          </div>
                         </div>
 
                         {item.metrics_updated_at ? (

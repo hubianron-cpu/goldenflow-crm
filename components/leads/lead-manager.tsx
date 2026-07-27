@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { CalendarClock, MessageSquareText, Plus, Search } from "lucide-react";
+import { LeadContentAttribution } from "@/components/business-center/lead-content-attribution";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
 import {
@@ -779,6 +780,12 @@ export function LeadManager() {
                             עדכון פרטים
                           </button>
                         </form>
+                        <div className="mt-3">
+                          <LeadContentAttribution
+                            leadId={lead.id}
+                            leadSource={lead.source}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -913,6 +920,12 @@ export function LeadManager() {
                       עדכון פרטים
                     </button>
                   </form>
+                  <div className="mt-3">
+                    <LeadContentAttribution
+                      leadId={lead.id}
+                      leadSource={lead.source}
+                    />
+                  </div>
                 </article>
               ))}
             </div>
