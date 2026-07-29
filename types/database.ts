@@ -132,13 +132,14 @@ export type Database = {
           closed_at: string | null;
           created_at: string;
           deal_probability: number;
+          email: string | null;
           id: string;
           last_contact_date: string | null;
           full_name: string;
           next_action_date: string | null;
           next_action_type: string | null;
           notes: string | null;
-          phone: string;
+          phone: string | null;
           priority: string;
           reason_not_closed: string | null;
           source: string;
@@ -151,13 +152,14 @@ export type Database = {
           closed_at?: string | null;
           created_at?: string;
           deal_probability?: number;
+          email?: string | null;
           id?: string;
           last_contact_date?: string | null;
           full_name: string;
           next_action_date?: string | null;
           next_action_type?: string | null;
           notes?: string | null;
-          phone: string;
+          phone?: string | null;
           priority?: string;
           reason_not_closed?: string | null;
           source: string;
@@ -170,13 +172,14 @@ export type Database = {
           closed_at?: string | null;
           created_at?: string;
           deal_probability?: number;
+          email?: string | null;
           id?: string;
           last_contact_date?: string | null;
           full_name?: string;
           next_action_date?: string | null;
           next_action_type?: string | null;
           notes?: string | null;
-          phone?: string;
+          phone?: string | null;
           priority?: string;
           reason_not_closed?: string | null;
           source?: string;
@@ -267,6 +270,77 @@ export type Database = {
           {
             foreignKeyName: "tasks_linked_lead_id_fkey";
             columns: ["linked_lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      lead_external_sources: {
+        Row: {
+          ad_id: string | null;
+          ad_name: string | null;
+          adset_id: string | null;
+          adset_name: string | null;
+          campaign_id: string | null;
+          campaign_name: string | null;
+          created_at: string;
+          external_lead_id: string;
+          form_id: string | null;
+          form_name: string | null;
+          id: string;
+          lead_id: string;
+          page_id: string | null;
+          page_name: string | null;
+          provider: string;
+          received_at: string;
+          submitted_at: string | null;
+          user_id: string;
+        };
+        Insert: {
+          ad_id?: string | null;
+          ad_name?: string | null;
+          adset_id?: string | null;
+          adset_name?: string | null;
+          campaign_id?: string | null;
+          campaign_name?: string | null;
+          created_at?: string;
+          external_lead_id: string;
+          form_id?: string | null;
+          form_name?: string | null;
+          id?: string;
+          lead_id: string;
+          page_id?: string | null;
+          page_name?: string | null;
+          provider: string;
+          received_at?: string;
+          submitted_at?: string | null;
+          user_id: string;
+        };
+        Update: {
+          ad_id?: string | null;
+          ad_name?: string | null;
+          adset_id?: string | null;
+          adset_name?: string | null;
+          campaign_id?: string | null;
+          campaign_name?: string | null;
+          created_at?: string;
+          external_lead_id?: string;
+          form_id?: string | null;
+          form_name?: string | null;
+          id?: string;
+          lead_id?: string;
+          page_id?: string | null;
+          page_name?: string | null;
+          provider?: string;
+          received_at?: string;
+          submitted_at?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lead_external_sources_lead_id_fkey";
+            columns: ["lead_id"];
             isOneToOne: false;
             referencedRelation: "leads";
             referencedColumns: ["id"];
