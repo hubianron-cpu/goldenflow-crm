@@ -465,13 +465,25 @@ function getBusinessInsights(
 
   if (leadAnalytics) {
     if (leadAnalytics.priorities.overdueCount > 0) {
-      actionText = `יש ${leadAnalytics.priorities.overdueCount} לידים שמועד החזרה אליהם עבר. מומלץ להתחיל מהחזרה הוותיקה ביותר.`;
+      actionText =
+        leadAnalytics.priorities.overdueCount === 1
+          ? "יש ליד אחד שמועד החזרה אליו עבר. מומלץ להתחיל מהחזרה הוותיקה ביותר."
+          : `יש ${leadAnalytics.priorities.overdueCount} לידים שמועד החזרה אליהם עבר. מומלץ להתחיל מהחזרה הוותיקה ביותר.`;
     } else if (leadAnalytics.priorities.callbacks.total > 0) {
-      actionText = `יש ${leadAnalytics.priorities.callbacks.total} לידים שמועד החזרה אליהם הגיע היום.`;
+      actionText =
+        leadAnalytics.priorities.callbacks.total === 1
+          ? "יש ליד אחד שמועד החזרה אליו הגיע היום."
+          : `יש ${leadAnalytics.priorities.callbacks.total} לידים שמועד החזרה אליהם הגיע היום.`;
     } else if (leadAnalytics.priorities.followupRequiredCount > 0) {
-      actionText = `יש ${leadAnalytics.priorities.followupRequiredCount} לידים שמסומנים כדורשים המשך טיפול.`;
+      actionText =
+        leadAnalytics.priorities.followupRequiredCount === 1
+          ? "יש ליד אחד שמסומן כדורש המשך טיפול."
+          : `יש ${leadAnalytics.priorities.followupRequiredCount} לידים שמסומנים כדורשים המשך טיפול.`;
     } else if (leadAnalytics.priorities.newLeads.total > 0) {
-      actionText = `יש ${leadAnalytics.priorities.newLeads.total} לידים חדשים שממתינים לטיפול. מומלץ להתחיל מהליד הוותיק ביותר.`;
+      actionText =
+        leadAnalytics.priorities.newLeads.total === 1
+          ? "יש ליד חדש אחד שממתין לטיפול. מומלץ להתחיל מהליד הוותיק ביותר."
+          : `יש ${leadAnalytics.priorities.newLeads.total} לידים חדשים שממתינים לטיפול. מומלץ להתחיל מהליד הוותיק ביותר.`;
     } else {
       actionText = "אין כרגע לידים חדשים, חזרות שמועדן הגיע או לידים שמסומנים כדורשים המשך טיפול.";
     }

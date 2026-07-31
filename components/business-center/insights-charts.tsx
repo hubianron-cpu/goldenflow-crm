@@ -408,7 +408,7 @@ export function BusinessInsightsCharts({
               secondLabel="נסגרו בהצלחה"
             />
             <p className="mt-4 text-xs leading-5 text-zinc-500">
-              הסגירות משויכות לחודש לפי `closed_at`. יחס הסגירה הנוכחי זמין
+              הסגירות משויכות לחודש לפי תאריך סגירת העסקה. יחס הסגירה הנוכחי זמין
               בטבלה הנגישה וב־tooltip כאשר קיימים לידים בחודש.
             </p>
             <div className="sr-only">

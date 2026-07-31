@@ -110,9 +110,20 @@ function getTomorrowIso() {
   return tomorrow.toISOString();
 }
 
+function normalizeWhatsappPhone(phone: string | null) {
+  const cleanPhone = phone?.trim().replace(/[\s()+-]/g, "") ?? "";
+
+  if (!/^\d+$/.test(cleanPhone)) {
+    return "";
+  }
+
+  const normalizedPhone = cleanPhone.startsWith("0") ? `972${cleanPhone.slice(1)}` : cleanPhone;
+  return normalizedPhone.length >= 10 && normalizedPhone.length <= 15 ? normalizedPhone : "";
+}
+
 function getWhatsappUrl(phone: string | null, message: string) {
-  const cleanPhone = phone?.replace(/[^\d+]/g, "");
-  return cleanPhone ? `https://wa.me/${cleanPhone.replace(/^\+/, "")}?text=${encodeURIComponent(message)}` : "#";
+  const normalizedPhone = normalizeWhatsappPhone(phone);
+  return normalizedPhone ? `https://wa.me/${normalizedPhone}?text=${encodeURIComponent(message)}` : undefined;
 }
 
 function getPriority(lead: Lead) {

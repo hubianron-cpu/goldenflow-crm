@@ -144,6 +144,7 @@ export function BusinessInsights({
               >
                 <Link
                   aria-current={period.type === "week" ? "page" : undefined}
+                  aria-selected={period.type === "week"}
                   className={
                     period.type === "week"
                       ? "button-primary min-h-10 px-4 py-2 text-xs"
@@ -156,6 +157,7 @@ export function BusinessInsights({
                 </Link>
                 <Link
                   aria-current={period.type === "month" ? "page" : undefined}
+                  aria-selected={period.type === "month"}
                   className={
                     period.type === "month"
                       ? "button-primary min-h-10 px-4 py-2 text-xs"
