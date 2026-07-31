@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { Check, GripVertical, MessageCircle, PhoneCall } from "lucide-react";
+import { GripVertical, MessageCircle, PhoneCall } from "lucide-react";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
 import {
@@ -373,6 +373,7 @@ export function PipelineBoard() {
                           )}
                           {lead.phone ? (
                             <a
+                              aria-label={lead.name?.trim() ? `פתיחת WhatsApp עבור ${lead.name.trim()}` : "פתיחת WhatsApp"}
                               className="button-secondary min-h-10 w-11 flex-none px-2 py-2 text-xs"
                               href={getWhatsappUrl(lead.phone)}
                               onClick={(event) => {
@@ -381,26 +382,13 @@ export function PipelineBoard() {
                               rel="noreferrer"
                               target="_blank"
                             >
-                              <MessageCircle className="h-3.5 w-3.5" />
+                              <MessageCircle aria-hidden="true" className="h-3.5 w-3.5" />
                             </a>
                           ) : (
                             <span className="button-secondary min-h-10 w-11 flex-none cursor-not-allowed px-2 py-2 text-xs opacity-50">
                               <MessageCircle className="h-3.5 w-3.5" />
                             </span>
                           )}
-                          <button
-                            className="button-secondary min-h-10 min-w-[86px] flex-1 px-2 py-2 text-xs"
-                            disabled={isPending}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleLeadHandled(lead);
-                            }}
-                            title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא"
-                            type="button"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                            ✔ טיפלתי
-                          </button>
                         </div>
 
                         <div className={`${expanded ? "grid" : "hidden group-hover:grid"} mt-3 gap-2 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-zinc-400`}>
