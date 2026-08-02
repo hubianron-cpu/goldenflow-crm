@@ -3,6 +3,7 @@
 import Link from "next/link";
 import {
   CheckCircle2,
+  ChevronDown,
   FileQuestion,
   Library,
   Link2,
@@ -41,11 +42,8 @@ export function ContentLeadPerformance({
   onRetry,
 }: ContentLeadPerformanceProps) {
   return (
-    <section
-      aria-labelledby="content-leads-title"
-      className="panel min-w-0 p-5 sm:p-7"
-    >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+    <details className="group panel min-w-0 p-5 sm:p-7">
+      <summary className="flex min-h-11 cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
         <div className="flex min-w-0 items-start gap-3">
           <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
             <Link2 className="h-5 w-5" />
@@ -59,6 +57,11 @@ export function ContentLeadPerformance({
             </p>
           </div>
         </div>
+        <ChevronDown className="mt-2 h-5 w-5 shrink-0 text-zinc-500 transition group-open:rotate-180" />
+      </summary>
+
+      <div className="mt-5 border-t border-white/[0.07] pt-5">
+        <div className="flex justify-end">
         <Link
           className="button-secondary min-h-10 w-full gap-2 px-4 py-2 text-xs sm:w-auto"
           href="/business-center/content"
@@ -66,7 +69,7 @@ export function ContentLeadPerformance({
           <Library className="h-4 w-4 text-gold-soft" />
           לספריית התוכן
         </Link>
-      </div>
+        </div>
 
       {!analytics.available ? (
         <div className="mt-5 rounded-2xl border border-gold/20 bg-gold/[0.05] p-5 text-sm">
@@ -229,6 +232,7 @@ export function ContentLeadPerformance({
           </div>
         </>
       )}
-    </section>
+      </div>
+    </details>
   );
 }
