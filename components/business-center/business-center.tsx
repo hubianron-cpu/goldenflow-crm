@@ -1090,6 +1090,11 @@ export function BusinessCenter() {
         </section>
       ) : data ? (
         <>
+          <BusinessCenterLeadIntelligence
+            analytics={data.lead_analytics}
+            monthLabel={formatMonth(selectedMonth)}
+          />
+
           <section aria-labelledby="business-status-title">
             <div className="mb-4 flex items-center gap-3">
               <span className="grid h-10 w-10 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
@@ -1130,32 +1135,27 @@ export function BusinessCenter() {
               })}
             </div>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {calculatedMetrics.map((metric) => (
-                <article className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4" key={metric.label}>
-                  <p className="text-xs font-bold text-zinc-400">{metric.label}</p>
-                  <p className="mt-2 text-xl font-black text-white">
-                    {metric.value === null
-                      ? "אין מספיק נתונים"
-                      : metric.money
-                        ? formatMoney(metric.value)
-                        : `${formatNumber(metric.value)}${metric.suffix}`}
-                  </p>
-                </article>
-              ))}
-            </div>
+            <details className="group mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
+              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300 [&::-webkit-details-marker]:hidden">
+                מדדי המרה נוספים
+                <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" />
+              </summary>
+              <div className="mt-4 grid gap-3 border-t border-white/[0.07] pt-4 sm:grid-cols-2 xl:grid-cols-4">
+                {calculatedMetrics.map((metric) => (
+                  <article className="rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4" key={metric.label}>
+                    <p className="text-xs font-bold text-zinc-400">{metric.label}</p>
+                    <p className="mt-2 text-xl font-black text-white">
+                      {metric.value === null
+                        ? "אין מספיק נתונים"
+                        : metric.money
+                          ? formatMoney(metric.value)
+                          : `${formatNumber(metric.value)}${metric.suffix}`}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            </details>
           </section>
-
-          <BusinessCenterLeadIntelligence
-            analytics={data.lead_analytics}
-            monthLabel={formatMonth(selectedMonth)}
-          />
-
-          <ContentLeadPerformance
-            analytics={data.content_attribution}
-            monthLabel={formatMonth(selectedMonth)}
-            onRetry={() => void loadBusinessCenter(selectedMonth)}
-          />
 
           <section className="panel p-5 sm:p-7" aria-labelledby="business-insights-title">
             <div className="mb-5 flex items-start gap-3">
@@ -1193,8 +1193,15 @@ export function BusinessCenter() {
             </div>
           </section>
 
-          <section className="panel p-5 sm:p-7" aria-labelledby="monthly-form-title">
-            <div className="mb-6 flex items-start gap-3">
+          <ContentLeadPerformance
+            analytics={data.content_attribution}
+            monthLabel={formatMonth(selectedMonth)}
+            onRetry={() => void loadBusinessCenter(selectedMonth)}
+          />
+
+          <details className="group panel p-5 sm:p-7">
+            <summary className="flex min-h-11 cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
+              <div className="flex items-start gap-3">
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
                 <BarChart3 className="h-5 w-5" />
               </span>
@@ -1206,7 +1213,11 @@ export function BusinessCenter() {
                   יעד ריק יוצג כ״לא הוגדר יעד״. תוצאה בפועל יכולה להיות 0.
                 </p>
               </div>
-            </div>
+              </div>
+              <ChevronDown className="mt-2 h-5 w-5 shrink-0 text-zinc-500 transition group-open:rotate-180" />
+            </summary>
+
+            <div className="mt-6 border-t border-white/[0.07] pt-6">
 
             {!monthly ? (
               <div className="mb-5 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4 text-sm text-zinc-400">
@@ -1390,10 +1401,11 @@ export function BusinessCenter() {
                 </span>
               ) : null}
             </div>
-          </section>
+            </div>
+          </details>
 
-          <section className="panel p-5 sm:p-7" aria-labelledby="social-profiles-title">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <details className="group panel p-5 sm:p-7">
+            <summary className="flex min-h-11 cursor-pointer list-none items-start justify-between gap-3 [&::-webkit-details-marker]:hidden">
               <div className="flex items-start gap-3">
                 <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
                   <UsersRound className="h-5 w-5" />
@@ -1407,6 +1419,10 @@ export function BusinessCenter() {
                   </p>
                 </div>
               </div>
+              <ChevronDown className="mt-2 h-5 w-5 shrink-0 text-zinc-500 transition group-open:rotate-180" />
+            </summary>
+
+            <div className="mt-5 flex justify-end border-t border-white/[0.07] pt-5">
               <button
                 className="button-primary gap-2"
                 disabled={isSaving}
@@ -1821,7 +1837,7 @@ export function BusinessCenter() {
                 })}
               </div>
             )}
-          </section>
+          </details>
         </>
       ) : (
         <section className="panel p-8 text-center">
