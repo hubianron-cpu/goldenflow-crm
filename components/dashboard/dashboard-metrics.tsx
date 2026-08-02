@@ -1056,7 +1056,7 @@ export function DashboardMetrics() {
         </div>
       ) : null}
 
-      <section className="relative mx-auto w-full max-w-full overflow-hidden rounded-[32px] border border-gold/20 bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.18),rgba(8,8,8,0.96)_48%,rgba(5,5,5,0.98))] px-4 py-10 text-center shadow-[0_30px_100px_rgba(0,0,0,0.42),0_0_58px_rgba(201,162,39,0.12)] sm:px-8 sm:py-16">
+      <section className="relative mx-auto w-full max-w-full overflow-hidden rounded-[32px] border border-gold/20 bg-[radial-gradient(circle_at_top,rgba(201,162,39,0.18),rgba(8,8,8,0.96)_48%,rgba(5,5,5,0.98))] px-4 py-8 text-center shadow-[0_30px_100px_rgba(0,0,0,0.42),0_0_58px_rgba(201,162,39,0.12)] sm:px-8 sm:py-10">
         <div className="pointer-events-none absolute inset-x-10 top-0 h-px bg-gradient-to-r from-transparent via-gold/70 to-transparent" />
         <div className="relative mx-auto flex max-w-[900px] flex-col items-center gap-5">
           <h1 className="max-w-[760px] break-words text-[clamp(2rem,9vw,3rem)] font-black leading-[1.14] tracking-tight text-white sm:text-5xl sm:leading-tight lg:text-[56px]">
@@ -1075,92 +1075,11 @@ export function DashboardMetrics() {
         </div>
       </section>
 
-      {priorityActionLead ? (
-        <section className="mx-auto w-full max-w-4xl rounded-[28px] border border-gold/30 bg-[linear-gradient(135deg,rgba(201,162,39,0.16),rgba(17,18,20,0.92))] p-4 shadow-[0_24px_70px_rgba(0,0,0,0.28),0_0_34px_rgba(201,162,39,0.14)] sm:p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-gold-soft">👉 הפעולה הבאה שלך:</p>
-              <h2 className="mt-2 break-words text-xl font-black tracking-tight text-white sm:text-2xl">
-                📞 התקשר ל{priorityActionLead.name} - שווה {formatMoney(priorityActionLead.value)}
-              </h2>
-              <p className="mt-2 break-words text-sm text-zinc-400">
-                {getUrgencyState(priorityActionLead).label} · {getActionReason(priorityActionLead)} · 💰 שווה {formatMoney(priorityActionLead.value)} אם תסגור היום
-              </p>
-            </div>
-            {priorityActionLead.phone ? (
-              <a className="button-primary min-h-12 w-full shrink-0 px-7 sm:w-auto" href={`tel:${priorityActionLead.phone}`} onClick={markUserAction}>
-                בצע עכשיו
-              </a>
-            ) : (
-              <Link className="button-primary min-h-12 w-full shrink-0 px-7 sm:w-auto" href="/leads" onClick={markUserAction}>
-                בצע עכשיו
-              </Link>
-            )}
-          </div>
-        </section>
-      ) : null}
-
       {showIdleWarning ? (
         <div className="mx-auto max-w-4xl rounded-2xl border border-danger/30 bg-danger/10 p-4 text-center text-sm font-semibold text-red-100 shadow-[0_0_28px_rgba(229,72,77,0.10)]">
           ⚠ לא בוצעה פעולה ב־15 דקות · 👉 בחר ליד והתקדם
         </div>
       ) : null}
-
-      <section className="relative mx-auto my-6 max-w-[760px] overflow-hidden rounded-[30px] border border-gold/25 bg-[linear-gradient(145deg,rgba(8,8,8,0.96),rgba(21,17,8,0.88))] p-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.42),0_0_52px_rgba(201,162,39,0.13)] sm:my-10 sm:p-6">
-        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
-        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-gold-soft">Daily Closing Pressure Bar</p>
-        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">התקדמות לסגירת היעד היומי</h2>
-        <div className="mx-auto mt-4 flex w-full max-w-md flex-col items-center justify-center gap-3 rounded-2xl border border-gold/25 bg-gold/10 px-4 py-3 shadow-[0_0_28px_rgba(201,162,39,0.12)] sm:flex-row">
-          <p className="text-base font-semibold text-white">יעד יומי: {formatMoney(dailyTarget)}</p>
-          <button
-            className="button-primary min-h-10 px-4 py-2 text-sm"
-            onClick={() => {
-              setTargetDraft(String(dailyTarget));
-              setTargetModalOpen(true);
-            }}
-            type="button"
-          >
-            ✏️ שנה יעד
-          </button>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-4">
-          <div className="rounded-2xl border border-gold/15 bg-black/35 p-3">
-            <p className="text-xs text-zinc-500">יעד יומי</p>
-            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(dailyTarget)}</p>
-          </div>
-          <div className="rounded-2xl border border-gold/35 bg-gold/10 p-3 shadow-[0_0_24px_rgba(201,162,39,0.12)]">
-            <p className="text-xs text-gold-soft">נסגר היום</p>
-            <p className="mt-1 text-xl font-semibold text-white">{formatMoney(closedTodayRevenue)}</p>
-          </div>
-          <div className="rounded-2xl border border-danger/30 bg-danger/10 p-3 shadow-[0_0_24px_rgba(229,72,77,0.10)]">
-            <p className="text-xs text-red-200">חסר ליעד היומי</p>
-            <p className="mt-1 text-xl font-semibold text-white">{formatMoney(dailyGap)}</p>
-          </div>
-          <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3">
-            <p className="text-xs text-gold-soft">פוטנציאל פתוח</p>
-            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(metrics.dailyRevenuePotential)}</p>
-          </div>
-        </div>
-
-        <div className="mt-5 h-5 overflow-hidden rounded-full bg-zinc-950 ring-1 ring-white/10">
-          <div
-            className="relative h-full rounded-full bg-gradient-to-l from-gold-soft via-gold to-gold shadow-[0_0_24px_rgba(201,162,39,0.38)] transition-all duration-700 ease-out after:absolute after:left-0 after:top-1/2 after:h-7 after:w-7 after:-translate-y-1/2 after:rounded-full after:bg-gold-soft after:blur-md after:content-['']"
-            style={{ width: `${dailyProgress}%` }}
-          />
-        </div>
-        <p className="mt-3 text-sm font-semibold text-gold-soft">{dailyProgress}% מהיעד היומי</p>
-        <p className="mt-3 text-base font-semibold text-white">
-          {dailyTargetReached ? "🔥 היעד היומי נסגר - עבודה חזקה!" : `🔥 עוד ${formatMoney(dailyGap)} לסגירת היעד - בוא נסגור את זה עכשיו`}
-        </p>
-        <p className="mt-1 text-sm text-zinc-400">
-          נסגר היום: {formatMoney(closedTodayRevenue)} · נשאר: {formatMoney(dailyGap)} · {dailyProgress}% התקדמות
-        </p>
-        <a className="button-primary mx-auto mt-5 w-full sm:w-auto" href="#daily-command-center">
-          קח אותי ללידים שיסגרו את זה 🔥
-        </a>
-        <p className="mt-3 text-xs text-zinc-500">כל פעולה מקרבת אותך לסגירה הבאה.</p>
-      </section>
 
       <section
         className={`relative w-full max-w-full overflow-hidden rounded-[32px] border border-gold/25 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.24),transparent_34%),linear-gradient(135deg,rgba(255,255,255,0.10),rgba(255,255,255,0.025))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.44)] sm:p-7 ${focusMode ? "min-h-[100dvh] lg:min-h-[calc(100vh-3rem)]" : ""}`}
@@ -1179,10 +1098,8 @@ export function DashboardMetrics() {
           </p>
 
           <div className="mx-auto mt-6 max-w-[520px] rounded-[28px] border border-gold/20 bg-black/35 p-4 shadow-[0_0_45px_rgba(201,162,39,0.10)]">
-            <label className="sr-only" htmlFor="daily-target">
-              יעד יומי
-            </label>
-            <div className="grid grid-cols-2 gap-3 text-center">
+            {focusMode ? (
+              <div className="grid grid-cols-2 gap-3 text-center">
               <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3">
                 <p className="text-xs text-zinc-500">יעד יומי</p>
                 <p className="mt-1 text-lg font-semibold text-white">{formatMoney(dailyTarget)}</p>
@@ -1199,9 +1116,10 @@ export function DashboardMetrics() {
                 <p className="text-xs text-red-200">פער ליעד</p>
                 <p className="mt-1 text-lg font-semibold text-white">{formatMoney(Math.max(0, dailyTarget - closedTodayRevenue))}</p>
               </div>
-            </div>
+              </div>
+            ) : null}
             <button
-              className={`${focusMode ? "button-secondary" : "button-primary"} mt-4 w-full`}
+              className={`${focusMode ? "button-secondary mt-4" : "button-primary"} w-full`}
               onClick={focusMode ? exitDailyClosingMode : enterDailyClosingMode}
               type="button"
             >
@@ -1513,30 +1431,6 @@ export function DashboardMetrics() {
               </button>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-2xl border border-gold/20 bg-zinc-950/95 p-2 shadow-[0_20px_60px_rgba(0,0,0,0.35)] backdrop-blur md:hidden">
-              {nextActionLead.phone ? (
-                <a className="button-secondary min-h-14 text-base" href={`tel:${nextActionLead.phone}`} onClick={markUserAction}>
-                  📞 להתקשר
-                </a>
-              ) : null}
-              {nextActionLead.phone ? (
-                <a
-                  className="button-secondary min-h-14 text-base"
-                  href={getWhatsappUrl(nextActionLead.phone, getScriptSuggestion(nextActionLead))}
-                  onClick={markUserAction}
-                  rel="noreferrer"
-                  target="_blank"
-                >
-                  💬 שלח הודעה
-                </a>
-              ) : null}
-              <button className="button-secondary min-h-12" disabled={updatingLeadId === nextActionLead.id} onClick={() => handleLeadHandled(nextActionLead.id)} title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא" type="button">
-                ✔ טיפלתי
-              </button>
-              <button className="button-secondary min-h-12" disabled={updatingLeadId === nextActionLead.id} onClick={() => handlePostponeToTomorrow(nextActionLead.id)} title="הליד יחזור לטיפול מחר" type="button">
-                ⏩ מחר
-              </button>
-            </div>
           </div>
         ) : (
           <div className="mx-auto mt-10 max-w-xl rounded-[30px] border border-gold/25 bg-black/35 p-8 text-center shadow-[0_0_55px_rgba(201,162,39,0.12)]">
@@ -1552,8 +1446,64 @@ export function DashboardMetrics() {
 
       {!focusMode ? (
         <>
-      <section className="relative w-full max-w-full overflow-hidden rounded-[30px] border border-gold/20 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] sm:p-7">
-        <div className="mx-auto max-w-3xl text-center">
+      <section className="relative mx-auto my-6 max-w-[760px] overflow-hidden rounded-[30px] border border-gold/25 bg-[linear-gradient(145deg,rgba(8,8,8,0.96),rgba(21,17,8,0.88))] p-5 text-center shadow-[0_24px_80px_rgba(0,0,0,0.42),0_0_52px_rgba(201,162,39,0.13)] sm:my-10 sm:p-6">
+        <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-gold/60 to-transparent" />
+        <p className="text-xs font-semibold uppercase tracking-[0.32em] text-gold-soft">Daily Closing Pressure Bar</p>
+        <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white sm:text-3xl">התקדמות לסגירת היעד היומי</h2>
+        <div className="mx-auto mt-4 flex w-full max-w-md flex-col items-center justify-center gap-3 rounded-2xl border border-gold/25 bg-gold/10 px-4 py-3 shadow-[0_0_28px_rgba(201,162,39,0.12)] sm:flex-row">
+          <p className="text-base font-semibold text-white">יעד יומי: {formatMoney(dailyTarget)}</p>
+          <button
+            className="button-primary min-h-10 px-4 py-2 text-sm"
+            onClick={() => {
+              setTargetDraft(String(dailyTarget));
+              setTargetModalOpen(true);
+            }}
+            type="button"
+          >
+            ✏️ שנה יעד
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-4">
+          <div className="rounded-2xl border border-gold/15 bg-black/35 p-3">
+            <p className="text-xs text-zinc-500">יעד יומי</p>
+            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(dailyTarget)}</p>
+          </div>
+          <div className="rounded-2xl border border-gold/35 bg-gold/10 p-3 shadow-[0_0_24px_rgba(201,162,39,0.12)]">
+            <p className="text-xs text-gold-soft">נסגר היום</p>
+            <p className="mt-1 text-xl font-semibold text-white">{formatMoney(closedTodayRevenue)}</p>
+          </div>
+          <div className="rounded-2xl border border-danger/30 bg-danger/10 p-3 shadow-[0_0_24px_rgba(229,72,77,0.10)]">
+            <p className="text-xs text-red-200">חסר ליעד היומי</p>
+            <p className="mt-1 text-xl font-semibold text-white">{formatMoney(dailyGap)}</p>
+          </div>
+          <div className="rounded-2xl border border-gold/20 bg-gold/10 p-3">
+            <p className="text-xs text-gold-soft">פוטנציאל פתוח</p>
+            <p className="mt-1 text-lg font-semibold text-white">{formatMoney(metrics.dailyRevenuePotential)}</p>
+          </div>
+        </div>
+
+        <div className="mt-5 h-5 overflow-hidden rounded-full bg-zinc-950 ring-1 ring-white/10">
+          <div
+            className="relative h-full rounded-full bg-gradient-to-l from-gold-soft via-gold to-gold shadow-[0_0_24px_rgba(201,162,39,0.38)] transition-all duration-700 ease-out after:absolute after:left-0 after:top-1/2 after:h-7 after:w-7 after:-translate-y-1/2 after:rounded-full after:bg-gold-soft after:blur-md after:content-['']"
+            style={{ width: `${dailyProgress}%` }}
+          />
+        </div>
+        <p className="mt-3 text-sm font-semibold text-gold-soft">{dailyProgress}% מהיעד היומי</p>
+        <p className="mt-3 text-base font-semibold text-white">
+          {dailyTargetReached ? "🔥 היעד היומי נסגר - עבודה חזקה!" : `🔥 עוד ${formatMoney(dailyGap)} לסגירת היעד - בוא נסגור את זה עכשיו`}
+        </p>
+        <p className="mt-1 text-sm text-zinc-400">
+          נסגר היום: {formatMoney(closedTodayRevenue)} · נשאר: {formatMoney(dailyGap)} · {dailyProgress}% התקדמות
+        </p>
+        <a className="button-primary mx-auto mt-5 w-full sm:w-auto" href="#daily-command-center">
+          קח אותי ללידים שיסגרו את זה 🔥
+        </a>
+        <p className="mt-3 text-xs text-zinc-500">כל פעולה מקרבת אותך לסגירה הבאה.</p>
+      </section>
+
+      <details className="relative w-full max-w-full overflow-hidden rounded-[30px] border border-gold/20 bg-[radial-gradient(circle_at_top_right,rgba(201,162,39,0.16),transparent_34%),radial-gradient(circle_at_bottom_left,rgba(59,130,246,0.10),transparent_38%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 shadow-[0_28px_90px_rgba(0,0,0,0.42)] sm:p-7">
+        <summary className="mx-auto max-w-3xl cursor-pointer list-none rounded-2xl text-center outline-none focus-visible:ring-2 focus-visible:ring-gold/50">
           <p className="text-xs font-semibold uppercase tracking-[0.35em] text-gold-soft">Daily Closing Board</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-tight sm:text-4xl">לוח סגירה יומי</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm leading-6 text-zinc-300">
@@ -1561,7 +1511,10 @@ export function DashboardMetrics() {
             <br />
             בלי לנחש, בלי להתפזר - רק פעולות שמביאות כסף
           </p>
-        </div>
+          <span className="mt-4 inline-flex rounded-full border border-gold/25 bg-gold/10 px-4 py-2 text-sm font-semibold text-gold-soft">
+            הצג את כל פעולות היום
+          </span>
+        </summary>
 
         <div className="mt-6 grid gap-4 xl:grid-cols-4">
           {[
@@ -1651,6 +1604,7 @@ export function DashboardMetrics() {
                             <span className="button-secondary min-h-9 min-w-[64px] flex-1 cursor-not-allowed px-2 py-1.5 text-xs opacity-50">שיחה</span>
                           )}
                           <a
+                            aria-label={`שליחת הודעת WhatsApp ל${lead.name}`}
                             className="button-secondary min-h-9 w-10 flex-none px-2 py-1.5 text-xs active:scale-[0.97]"
                             href={getWhatsappUrl(lead.phone, `היי ${lead.name}, רציתי לבדוק איך אפשר להתקדם.`)}
                             onClick={markUserAction}
@@ -1718,9 +1672,14 @@ export function DashboardMetrics() {
             ))}
           </div>
         </div>
-      </section>
+      </details>
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-5">
+      <details className="panel p-4 sm:p-5">
+        <summary className="cursor-pointer list-none rounded-2xl px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-gold/50">
+          <p className="text-lg font-semibold text-white">מדדים עסקיים נוספים</p>
+          <p className="mt-1 text-sm text-zinc-400">פירוט רחב של פעילות, פוטנציאל והכנסות.</p>
+        </summary>
+      <div className="mt-5 grid gap-5 md:grid-cols-2 xl:grid-cols-5">
         {[
           {
             accent: "from-success/20 to-gold/5",
@@ -1794,7 +1753,19 @@ export function DashboardMetrics() {
           </article>
         ))}
       </div>
+      </details>
 
+      <details className="panel p-4 sm:p-5">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 rounded-2xl px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-gold/50">
+          <div>
+            <p className="text-lg font-semibold text-white">רשימות מעקב נוספות</p>
+            <p className="mt-1 text-sm text-zinc-400">לידים לטיפול היום ולידים שמחכים לפולואפ.</p>
+          </div>
+          <span className="rounded-full border border-gold/25 bg-gold/10 px-3 py-1 text-sm text-gold-soft">
+            פתח רשימות
+          </span>
+        </summary>
+        <div className="mt-5 space-y-6">
       <section className="panel border-white/[0.08] bg-white/[0.035] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.24)] backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_90px_rgba(201,162,39,0.08)] sm:p-8">
         <div className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
           <div className="flex flex-col items-center gap-3">
@@ -2001,7 +1972,15 @@ export function DashboardMetrics() {
           </div>
         )}
       </section>
+        </div>
+      </details>
 
+      <details className="panel p-4 sm:p-5">
+        <summary className="cursor-pointer list-none rounded-2xl px-2 py-1 outline-none focus-visible:ring-2 focus-visible:ring-gold/50">
+          <p className="text-lg font-semibold text-white">מסלול המכירה וניתוחים נוספים</p>
+          <p className="mt-1 text-sm text-zinc-400">פוטנציאל סגירה, פולואפ והתפלגות לפי שלב.</p>
+        </summary>
+        <div className="mt-5 space-y-6">
       <div className="grid gap-6 xl:grid-cols-2">
         <section className="panel flex h-full flex-col border-white/[0.08] bg-white/[0.035] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.22)] backdrop-blur transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_28px_90px_rgba(201,162,39,0.08)] sm:p-7">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -2210,6 +2189,8 @@ export function DashboardMetrics() {
           שיעור הלידים שנמצאים כעת בשלב הצעה מתוך כלל הלידים: {metrics.proposalShare}%
         </p>
       </section>
+        </div>
+      </details>
         </>
       ) : null}
     </div>
