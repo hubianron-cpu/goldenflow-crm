@@ -860,56 +860,72 @@ export function LeadManager() {
                         <span className={`rounded-full border px-3 py-1 text-xs ${getLeadStatusColor(lead.status)}`}>
                           {normalizeLeadStatus(lead.status)}
                         </span>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {LEAD_STATUSES.map((status) => (
-                            <button
-                              className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
-                                normalizeLeadStatus(lead.status) === status.value
-                                  ? "border-gold/40 bg-gold/20 text-gold-soft"
-                                  : "border-white/10 bg-white/5 text-zinc-300 hover:border-gold/30"
-                              }`}
-                              disabled={isPending}
-                              key={status.value}
-                              onClick={() => updateStatus(lead.id, status.value)}
-                              type="button"
-                            >
-                              {status.label}
-                            </button>
-                          ))}
-                        </div>
+                        <details className="group mt-3">
+                          <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-xs [&::-webkit-details-marker]:hidden">
+                            שינוי סטטוס
+                          </summary>
+                          <div className="mt-2 flex flex-wrap gap-2 rounded-xl border border-white/10 bg-black/20 p-2">
+                            {LEAD_STATUSES.map((status) => (
+                              <button
+                                className={`rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                                  normalizeLeadStatus(lead.status) === status.value
+                                    ? "border-gold/40 bg-gold/20 text-gold-soft"
+                                    : "border-white/10 bg-white/5 text-zinc-300 hover:border-gold/30"
+                                }`}
+                                disabled={isPending}
+                                key={status.value}
+                                onClick={() => updateStatus(lead.id, status.value)}
+                                type="button"
+                              >
+                                {status.label}
+                              </button>
+                            ))}
+                          </div>
+                        </details>
                       </td>
                       <td className="px-5 py-4">
                         <p className={isOverdue(lead.next_action_date) ? "font-medium text-red-200" : "text-zinc-300"}>
                           {formatNextAction(lead)}
                         </p>
                         <p className="mt-1 text-xs text-zinc-500">{getNextActionLabel(lead.next_action_type)}</p>
-                        <form className="mt-3 space-y-2" onSubmit={(event) => handleFollowUp(event, lead.id)}>
-                          <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
-                          <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
-                            {NEXT_ACTION_TYPES.map((type) => (
-                              <option key={type.value} value={type.value}>
-                                {type.label}
-                              </option>
-                            ))}
-                          </select>
-                          <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
-                            שמירת מעקב
-                          </button>
-                        </form>
+                        <details className="group mt-3">
+                          <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-xs [&::-webkit-details-marker]:hidden">
+                            עדכון מעקב
+                          </summary>
+                          <form className="mt-2 space-y-2 rounded-xl border border-white/10 bg-black/20 p-2" onSubmit={(event) => handleFollowUp(event, lead.id)}>
+                            <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
+                            <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
+                              {NEXT_ACTION_TYPES.map((type) => (
+                                <option key={type.value} value={type.value}>
+                                  {type.label}
+                                </option>
+                              ))}
+                            </select>
+                            <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
+                              שמירת מעקב
+                            </button>
+                          </form>
+                        </details>
                       </td>
                       <td className="px-5 py-4">
-                        <form onSubmit={(event) => handleNote(event, lead.id)}>
-                          <textarea
-                            className="field min-h-24 resize-none"
-                            defaultValue={lead.notes ?? ""}
-                            name="notes"
-                            placeholder="סיכום שיחה קצר..."
-                          />
-                          <button className="button-secondary mt-2 w-full py-2" disabled={isPending} type="submit">
-                            <MessageSquareText className="ml-2 h-4 w-4" />
-                            שמירת הערה
-                          </button>
-                        </form>
+                        <p className="line-clamp-3 text-sm text-zinc-400">{lead.notes || "אין הערה שמורה"}</p>
+                        <details className="group mt-3">
+                          <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-xs [&::-webkit-details-marker]:hidden">
+                            עריכת הערה
+                          </summary>
+                          <form className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2" onSubmit={(event) => handleNote(event, lead.id)}>
+                            <textarea
+                              className="field min-h-24 resize-none"
+                              defaultValue={lead.notes ?? ""}
+                              name="notes"
+                              placeholder="סיכום שיחה קצר..."
+                            />
+                            <button className="button-secondary mt-2 w-full py-2" disabled={isPending} type="submit">
+                              <MessageSquareText aria-hidden="true" className="ml-2 h-4 w-4" />
+                              שמירת הערה
+                            </button>
+                          </form>
+                        </details>
                       </td>
                       <td className="px-5 py-4">
                         <button
@@ -920,48 +936,55 @@ export function LeadManager() {
                         >
                           ✔ סיימתי פעולה
                         </button>
-                        <button
-                          className="button-danger mb-3 w-full py-2"
-                          disabled={isPending}
-                          onClick={() => setLeadToDelete(lead)}
-                          type="button"
-                        >
-                          מחק ליד
-                        </button>
                         <div className="mb-3">
                           {renderWhatsAppCenter(lead)}
                         </div>
-                        <form className="space-y-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
-                          <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
-                          <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
-                          <input className="field py-2" defaultValue={lead.source ?? ""} name="source" placeholder="מקור" />
-                          <input className="field py-2" defaultValue={lead.value} min="0" name="value" placeholder="שווי עסקה" type="number" />
-                          <input
-                            className="field py-2"
-                            defaultValue={lead.deal_probability}
-                            max="100"
-                            min="0"
-                            name="deal_probability"
-                            placeholder="הסתברות"
-                            type="number"
-                          />
-                          <select className="field py-2" defaultValue={lead.priority} name="priority">
-                            {PRIORITIES.map((priority) => (
-                              <option key={priority.value} value={priority.value}>
-                                {priority.label}
-                              </option>
-                            ))}
-                          </select>
-                          <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
-                            עדכון פרטים
-                          </button>
-                        </form>
-                        <div className="mt-3">
-                          <LeadContentAttribution
-                            leadId={lead.id}
-                            leadSource={lead.source}
-                          />
-                        </div>
+                        <details className="group">
+                          <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-sm [&::-webkit-details-marker]:hidden">
+                            עריכה ופעולות נוספות
+                          </summary>
+                          <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
+                            <form className="space-y-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
+                              <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
+                              <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
+                              <input className="field py-2" defaultValue={lead.source ?? ""} name="source" placeholder="מקור" />
+                              <input className="field py-2" defaultValue={lead.value} min="0" name="value" placeholder="שווי עסקה" type="number" />
+                              <input
+                                className="field py-2"
+                                defaultValue={lead.deal_probability}
+                                max="100"
+                                min="0"
+                                name="deal_probability"
+                                placeholder="הסתברות"
+                                type="number"
+                              />
+                              <select className="field py-2" defaultValue={lead.priority} name="priority">
+                                {PRIORITIES.map((priority) => (
+                                  <option key={priority.value} value={priority.value}>
+                                    {priority.label}
+                                  </option>
+                                ))}
+                              </select>
+                              <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
+                                עדכון פרטים
+                              </button>
+                            </form>
+                            <div className="mt-3">
+                              <LeadContentAttribution
+                                leadId={lead.id}
+                                leadSource={lead.source}
+                              />
+                            </div>
+                            <button
+                              className="button-danger mt-3 w-full py-2"
+                              disabled={isPending}
+                              onClick={() => setLeadToDelete(lead)}
+                              type="button"
+                            >
+                              מחק ליד
+                            </button>
+                          </div>
+                        </details>
                       </td>
                     </tr>
                   ))}
@@ -1020,88 +1043,95 @@ export function LeadManager() {
                   >
                     ✔ סיימתי פעולה
                   </button>
-                  <button
-                    className="button-danger mt-3 w-full py-2"
-                    disabled={isPending}
-                    onClick={() => setLeadToDelete(lead)}
-                    type="button"
-                  >
-                    מחק ליד
-                  </button>
                   <div className="mt-3">
                     {renderWhatsAppCenter(lead)}
                   </div>
+                  <details className="group mt-3">
+                    <summary className="button-secondary min-h-11 w-full cursor-pointer list-none py-2 text-center text-sm [&::-webkit-details-marker]:hidden">
+                      עריכה ופעולות נוספות
+                    </summary>
+                    <div className="mt-2 space-y-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-zinc-400">שינוי סטטוס</p>
+                        <div className="flex flex-wrap gap-2">
+                          {LEAD_STATUSES.map((status) => (
+                            <button
+                              className={`rounded-lg border px-3 py-2 text-xs ${
+                                normalizeLeadStatus(lead.status) === status.value
+                                  ? "border-gold/40 bg-gold/20 text-gold-soft"
+                                  : "border-white/10 bg-white/5 text-zinc-300"
+                              }`}
+                              disabled={isPending}
+                              key={status.value}
+                              onClick={() => updateStatus(lead.id, status.value)}
+                              type="button"
+                            >
+                              {status.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
 
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {LEAD_STATUSES.map((status) => (
+                      <form className="grid gap-2 sm:grid-cols-[1fr_150px_auto]" onSubmit={(event) => handleFollowUp(event, lead.id)}>
+                        <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
+                        <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
+                          {NEXT_ACTION_TYPES.map((type) => (
+                            <option key={type.value} value={type.value}>
+                              {type.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button className="button-secondary py-2" disabled={isPending} type="submit">
+                          שמירה
+                        </button>
+                      </form>
+
+                      <form onSubmit={(event) => handleNote(event, lead.id)}>
+                        <textarea className="field min-h-20 resize-none" defaultValue={lead.notes ?? ""} name="notes" placeholder="סיכום שיחה..." />
+                        <button className="button-secondary mt-2 w-full py-2" disabled={isPending} type="submit">
+                          שמירת הערה
+                        </button>
+                      </form>
+
+                      <form className="grid gap-2 sm:grid-cols-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
+                        <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
+                        <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
+                        <input className="field py-2" defaultValue={lead.source ?? ""} name="source" placeholder="מקור" />
+                        <input className="field py-2" defaultValue={lead.value} min="0" name="value" placeholder="שווי" type="number" />
+                        <input
+                          className="field py-2"
+                          defaultValue={lead.deal_probability}
+                          max="100"
+                          min="0"
+                          name="deal_probability"
+                          placeholder="הסתברות"
+                          type="number"
+                        />
+                        <select className="field py-2" defaultValue={lead.priority} name="priority">
+                          {PRIORITIES.map((priority) => (
+                            <option key={priority.value} value={priority.value}>
+                              {priority.label}
+                            </option>
+                          ))}
+                        </select>
+                        <button className="button-secondary py-2 sm:col-span-2" disabled={isPending} type="submit">
+                          עדכון פרטים
+                        </button>
+                      </form>
+                      <LeadContentAttribution
+                        leadId={lead.id}
+                        leadSource={lead.source}
+                      />
                       <button
-                        className={`rounded-lg border px-3 py-2 text-xs ${
-                          normalizeLeadStatus(lead.status) === status.value
-                            ? "border-gold/40 bg-gold/20 text-gold-soft"
-                            : "border-white/10 bg-white/5 text-zinc-300"
-                        }`}
+                        className="button-danger w-full py-2"
                         disabled={isPending}
-                        key={status.value}
-                        onClick={() => updateStatus(lead.id, status.value)}
+                        onClick={() => setLeadToDelete(lead)}
                         type="button"
                       >
-                        {status.label}
+                        מחק ליד
                       </button>
-                    ))}
-                  </div>
-
-                  <form className="mt-4 grid gap-2 sm:grid-cols-[1fr_150px_auto]" onSubmit={(event) => handleFollowUp(event, lead.id)}>
-                    <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
-                    <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
-                      {NEXT_ACTION_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="button-secondary py-2" disabled={isPending} type="submit">
-                      שמירה
-                    </button>
-                  </form>
-
-                  <form className="mt-3" onSubmit={(event) => handleNote(event, lead.id)}>
-                    <textarea className="field min-h-20 resize-none" defaultValue={lead.notes ?? ""} name="notes" placeholder="סיכום שיחה..." />
-                    <button className="button-secondary mt-2 w-full py-2" disabled={isPending} type="submit">
-                      שמירת הערה
-                    </button>
-                  </form>
-
-                  <form className="mt-3 grid gap-2 sm:grid-cols-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
-                    <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
-                    <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
-                    <input className="field py-2" defaultValue={lead.source ?? ""} name="source" placeholder="מקור" />
-                    <input className="field py-2" defaultValue={lead.value} min="0" name="value" placeholder="שווי" type="number" />
-                    <input
-                      className="field py-2"
-                      defaultValue={lead.deal_probability}
-                      max="100"
-                      min="0"
-                      name="deal_probability"
-                      placeholder="הסתברות"
-                      type="number"
-                    />
-                    <select className="field py-2" defaultValue={lead.priority} name="priority">
-                      {PRIORITIES.map((priority) => (
-                        <option key={priority.value} value={priority.value}>
-                          {priority.label}
-                        </option>
-                      ))}
-                    </select>
-                    <button className="button-secondary py-2 sm:col-span-2" disabled={isPending} type="submit">
-                      עדכון פרטים
-                    </button>
-                  </form>
-                  <div className="mt-3">
-                    <LeadContentAttribution
-                      leadId={lead.id}
-                      leadSource={lead.source}
-                    />
-                  </div>
+                    </div>
+                  </details>
                 </article>
               ))}
             </div>

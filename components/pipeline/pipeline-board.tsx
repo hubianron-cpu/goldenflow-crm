@@ -341,8 +341,8 @@ export function PipelineBoard() {
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <GripVertical className="h-4 w-4 shrink-0 text-zinc-600" />
-                              <h4 className="truncate text-sm font-semibold">{lead.name}</h4>
+                              <GripVertical aria-hidden="true" className="h-4 w-4 shrink-0 text-zinc-600" />
+                              <h4 className="line-clamp-2 break-words text-sm font-semibold" title={lead.name}>{lead.name}</h4>
                             </div>
                             <p className="mt-1 text-[11px] text-zinc-500">
                               קשר: {formatShortDate(lead.last_contact_date)} · {stage.label}
@@ -359,35 +359,37 @@ export function PipelineBoard() {
                         <div className="mt-3 flex max-w-full flex-wrap gap-2">
                           {lead.phone ? (
                             <a
+                              aria-label={lead.name?.trim() ? `פתיחת WhatsApp עבור ${lead.name.trim()}` : "פתיחת WhatsApp"}
+                              className="button-primary min-h-10 min-w-[100px] flex-1 px-2 py-2 text-xs"
+                              href={getWhatsappUrl(lead.phone)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                              rel="noopener noreferrer"
+                              target="_blank"
+                            >
+                              <MessageCircle aria-hidden="true" className="h-3.5 w-3.5" />
+                              WhatsApp
+                            </a>
+                          ) : (
+                            <span className="button-primary min-h-10 min-w-[100px] flex-1 cursor-not-allowed px-2 py-2 text-xs opacity-50">
+                              <MessageCircle aria-hidden="true" className="h-3.5 w-3.5" />
+                              WhatsApp
+                            </span>
+                          )}
+                          {lead.phone ? (
+                            <a
                               className="button-secondary min-h-10 min-w-[72px] flex-1 px-2 py-2 text-xs"
                               href={`tel:${lead.phone}`}
                               onClick={(event) => {
                                 event.stopPropagation();
                               }}
                             >
-                              <PhoneCall className="h-3.5 w-3.5" />
+                              <PhoneCall aria-hidden="true" className="h-3.5 w-3.5" />
                               שיחה
                             </a>
                           ) : (
                             <span className="button-secondary min-h-10 min-w-[72px] flex-1 cursor-not-allowed px-2 py-2 text-xs opacity-50">שיחה</span>
-                          )}
-                          {lead.phone ? (
-                            <a
-                              aria-label={lead.name?.trim() ? `פתיחת WhatsApp עבור ${lead.name.trim()}` : "פתיחת WhatsApp"}
-                              className="button-secondary min-h-10 w-11 flex-none px-2 py-2 text-xs"
-                              href={getWhatsappUrl(lead.phone)}
-                              onClick={(event) => {
-                                event.stopPropagation();
-                              }}
-                              rel="noreferrer"
-                              target="_blank"
-                            >
-                              <MessageCircle aria-hidden="true" className="h-3.5 w-3.5" />
-                            </a>
-                          ) : (
-                            <span className="button-secondary min-h-10 w-11 flex-none cursor-not-allowed px-2 py-2 text-xs opacity-50">
-                              <MessageCircle className="h-3.5 w-3.5" />
-                            </span>
                           )}
                         </div>
 
