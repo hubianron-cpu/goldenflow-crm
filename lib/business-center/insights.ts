@@ -1,11 +1,11 @@
 import { isFinalLeadStatus, normalizeLeadStatus } from "@/lib/leads";
+import { isBusinessCenterWonStatus } from "@/lib/business-center/semantics";
 
 export const BUSINESS_INSIGHTS_TIME_ZONE = "Asia/Jerusalem";
 export const BUSINESS_INSIGHTS_TREND_MONTHS = 6;
 
 const DAY_MS = 86_400_000;
 const INITIAL_LEAD_STATUS = "לידים חדשים";
-const WON_LEAD_STATUS = "נסגר בהצלחה";
 const datePattern = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])$/;
 const uuidPattern =
@@ -569,14 +569,6 @@ function getDaysBetween(date: Date, earlierValue: string) {
   );
 }
 
-function isWonStatus(status: string) {
-  const cleanStatus = status.trim().toLowerCase();
-  return (
-    normalizeLeadStatus(status) === WON_LEAD_STATUS ||
-    cleanStatus === "won"
-  );
-}
-
 function isOpenStatus(status: string) {
   return !isFinalLeadStatus(status);
 }
@@ -676,7 +668,7 @@ export function getBusinessPeriodSummary(
     : [];
   const closedLeads = input.closedLeads.available
     ? uniqueById(input.closedLeads.data).filter(
-        (lead) => lead.closed_at && isWonStatus(lead.status),
+        (lead) => lead.closed_at && isBusinessCenterWonStatus(lead.status),
       )
     : [];
   const metrics = {
@@ -816,7 +808,7 @@ export function getBusinessPeriodSummary(
     const source = lead.source.trim() || "לא ידוע";
     const current = sourceTotals.get(source) ?? { count: 0, currentWon: 0 };
     current.count += 1;
-    current.currentWon += isWonStatus(lead.status) ? 1 : 0;
+    current.currentWon += isBusinessCenterWonStatus(lead.status) ? 1 : 0;
     sourceTotals.set(source, current);
   }
 
@@ -962,7 +954,7 @@ export function getBusinessTrendSeries(
         const ids = leadTotals.get(createdMonth) ?? new Set<string>();
         ids.add(lead.id);
         leadTotals.set(createdMonth, ids);
-        if (isWonStatus(lead.status)) {
+        if (isBusinessCenterWonStatus(lead.status)) {
           const wonIds =
             currentWonCohorts.get(createdMonth) ?? new Set<string>();
           wonIds.add(lead.id);
@@ -974,7 +966,7 @@ export function getBusinessTrendSeries(
       if (
         closedMonth &&
         monthLabels.has(closedMonth) &&
-        isWonStatus(lead.status)
+        isBusinessCenterWonStatus(lead.status)
       ) {
         const ids = closedTotals.get(closedMonth) ?? new Set<string>();
         ids.add(lead.id);

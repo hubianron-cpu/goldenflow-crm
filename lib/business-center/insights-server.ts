@@ -68,6 +68,23 @@ function addMonth(month: string) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+function isTimestampInRange(
+  value: string | null,
+  startTime: number,
+  endTime: number,
+) {
+  if (!value) {
+    return false;
+  }
+
+  const timestamp = Date.parse(value);
+  return (
+    Number.isFinite(timestamp) &&
+    timestamp >= startTime &&
+    timestamp < endTime
+  );
+}
+
 export async function getBusinessInsightsData(
   supabase: SupabaseServerClient,
   userId: string,
@@ -90,10 +107,18 @@ export async function getBusinessInsightsData(
     : `and(month_start.gte.${trendStartDate},month_start.lt.${trendEndDate})`;
   const staleCutoff = new Date(now.getTime() - 7 * 86_400_000).toISOString();
   const nowIso = now.toISOString();
+  const periodStartTime = Date.parse(selection.period.startIso);
+  const periodEndTime = Date.parse(selection.period.endIso);
+  const trendStartTime = Date.parse(trendStart.startIso);
+  const trendEndTime = Date.parse(trendEnd.endIso);
+  const leadRangeFilter = [
+    `and(created_at.gte.${trendStart.startIso},created_at.lt.${trendEnd.endIso})`,
+    `and(closed_at.gte.${trendStart.startIso},closed_at.lt.${trendEnd.endIso})`,
+    `and(closed_at.gte.${selection.period.startIso},closed_at.lt.${selection.period.endIso})`,
+  ].join(",");
 
   const [
     periodLeadsResult,
-    closedLeadsResult,
     trendLeadsResult,
     monthlyMetricsResult,
     publishedContentResult,
@@ -113,19 +138,9 @@ export async function getBusinessInsightsData(
       .order("created_at", { ascending: true }),
     supabase
       .from("leads")
-      .select("id, closed_at, status")
-      .eq("user_id", userId)
-      .in("status", ["נסגר בהצלחה", "נסגר", "won"])
-      .not("closed_at", "is", null)
-      .gte("closed_at", selection.period.startIso)
-      .lt("closed_at", selection.period.endIso),
-    supabase
-      .from("leads")
       .select("id, created_at, closed_at, status")
       .eq("user_id", userId)
-      .or(
-        `and(created_at.gte.${trendStart.startIso},created_at.lt.${trendEnd.endIso}),and(closed_at.gte.${trendStart.startIso},closed_at.lt.${trendEnd.endIso})`,
-      ),
+      .or(leadRangeFilter),
     supabase
       .from("business_center_monthly_metrics")
       .select(
@@ -196,26 +211,46 @@ export async function getBusinessInsightsData(
         available: true,
         data: (periodLeadsResult.data ?? []) as InsightLeadRow[],
       };
-  const closedLeads: AvailableData<InsightClosedLeadRow[]> =
-    closedLeadsResult.error
-      ? failedData(
-          closedLeadsResult.error,
-          "BUSINESS_INSIGHTS_CLOSED_LEADS_FAILED",
-        )
-      : {
-          available: true,
-          data: (closedLeadsResult.data ?? []) as InsightClosedLeadRow[],
-        };
-  const trendLeads: AvailableData<InsightTrendLeadRow[]> =
-    trendLeadsResult.error
-      ? failedData(
-          trendLeadsResult.error,
-          "BUSINESS_INSIGHTS_TREND_LEADS_FAILED",
-        )
-      : {
-          available: true,
-          data: (trendLeadsResult.data ?? []) as InsightTrendLeadRow[],
-        };
+  let closedLeads: AvailableData<InsightClosedLeadRow[]>;
+  let trendLeads: AvailableData<InsightTrendLeadRow[]>;
+
+  if (trendLeadsResult.error) {
+    logQueryError("BUSINESS_INSIGHTS_TREND_LEADS_FAILED", trendLeadsResult.error);
+    const unavailable = {
+      available: false as const,
+      reason: "load_failed" as const,
+    };
+    closedLeads = unavailable;
+    trendLeads = unavailable;
+  } else {
+    const leads = (trendLeadsResult.data ?? []) as InsightTrendLeadRow[];
+    closedLeads = {
+      available: true,
+      data: leads.filter((lead) =>
+        isTimestampInRange(
+          lead.closed_at,
+          periodStartTime,
+          periodEndTime,
+        ),
+      ),
+    };
+    trendLeads = {
+      available: true,
+      data: leads.filter(
+        (lead) =>
+          isTimestampInRange(
+            lead.created_at,
+            trendStartTime,
+            trendEndTime,
+          ) ||
+          isTimestampInRange(
+            lead.closed_at,
+            trendStartTime,
+            trendEndTime,
+          ),
+      ),
+    };
+  }
   const monthlyMetricRows: AvailableData<InsightMonthlyMetricRow[]> =
     monthlyMetricsResult.error
       ? failedData(

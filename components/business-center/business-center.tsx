@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   BarChart3,
   CalendarDays,
@@ -24,6 +24,7 @@ import { BusinessCenterLeadIntelligence } from "@/components/business-center/lea
 import { StatusMessage } from "@/components/status-message";
 import type { ContentAttributionAnalytics } from "@/lib/business-center/content-attribution";
 import type { BusinessCenterLeadAnalytics } from "@/lib/business-center/lead-analytics";
+import { calculatePercentage } from "@/lib/business-center/semantics";
 import type { Database } from "@/types/database";
 
 type MonthlyMetrics = Database["public"]["Tables"]["business_center_monthly_metrics"]["Row"];
@@ -294,13 +295,8 @@ async function getJson<T>(response: Response) {
   return payload as T;
 }
 
-function getProgress(actual: number, target: number | null) {
-  if (target === null || target <= 0) {
-    return null;
-  }
-
-  const percentage = (actual / target) * 100;
-  return Number.isFinite(percentage) && percentage >= 0 ? percentage : null;
+function getProgress(actual: number | null, target: number | null) {
+  return calculatePercentage(actual, target);
 }
 
 function getPaceLabel(progress: number | null, selectedMonth: string) {
@@ -333,7 +329,11 @@ function getPaceLabel(progress: number | null, selectedMonth: string) {
   return "בקצב";
 }
 
-function getComparison(actual: number, previous: number | null, money = false) {
+function getComparison(actual: number | null, previous: number | null, money = false) {
+  if (actual === null) {
+    return "אין נתון בחודש שנבחר";
+  }
+
   if (previous === null) {
     return "אין נתוני חודש קודם";
   }
@@ -349,27 +349,6 @@ function getComparison(actual: number, previous: number | null, money = false) {
 
   const percentage = (difference / previous) * 100;
   return `${formattedDifference} (${percentage >= 0 ? "+" : ""}${formatNumber(percentage)}%)`;
-}
-
-function safeRate(numerator: number, denominator: number) {
-  if (denominator <= 0) {
-    return null;
-  }
-
-  const value = (numerator / denominator) * 100;
-  return Number.isFinite(value) ? value : null;
-}
-
-function safeLeadRate(numerator: number, monthlyLeads: number | null) {
-  if (monthlyLeads === null) {
-    return null;
-  }
-
-  if (monthlyLeads === 0) {
-    return 0;
-  }
-
-  return safeRate(numerator, monthlyLeads);
 }
 
 function getProfileLastUpdated(profile: ProfileWithSnapshots) {
@@ -399,8 +378,8 @@ function getBusinessInsights(
   const profilesMissingMeasurement = activeProfiles.length - measuredThisMonth.length;
   const actualCalls = monthly?.actual_sales_calls ?? 0;
   const actualCustomers = monthly?.actual_new_customers ?? 0;
-  const leadToCallRate = safeLeadRate(actualCalls, resolvedMonthlyLeads);
-  const callToCustomerRate = safeRate(actualCustomers, actualCalls);
+  const leadToCallRate = calculatePercentage(actualCalls, resolvedMonthlyLeads);
+  const callToCustomerRate = calculatePercentage(actualCustomers, actualCalls);
   const attributedLeads = measuredThisMonth.reduce(
     (total, profile) => total + (profile.latest_snapshot?.attributed_leads_count ?? 0),
     0,
@@ -530,7 +509,7 @@ function MetricCard({
   source,
   target,
 }: {
-  actual: number;
+  actual: number | null;
   label: string;
   money?: boolean;
   pace: string | null;
@@ -550,7 +529,13 @@ function MetricCard({
             </span>
           </div>
           <p className="mt-2 break-words text-2xl font-black text-white sm:text-3xl">
-            {money ? formatMoney(actual) : formatNumber(actual)}
+            {actual === null
+              ? source === "manual"
+                ? "לא הוזן"
+                : "אין נתון"
+              : money
+                ? formatMoney(actual)
+                : formatNumber(actual)}
           </p>
         </div>
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-gold/20 bg-gold/10 text-gold-soft">
@@ -573,7 +558,11 @@ function MetricCard({
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
         <span className="font-bold text-gold-soft">
-          {progress === null ? "לא הוגדר יעד" : `${formatNumber(progress)}%`}
+          {progress === null
+            ? target === null
+              ? "לא הוגדר יעד"
+              : "אין מספיק נתונים"
+            : `${formatNumber(progress)}%`}
         </span>
         {pace ? (
           <span className="rounded-full border border-white/10 bg-white/[0.04] px-2.5 py-1 text-zinc-300">
@@ -624,6 +613,7 @@ export function BusinessCenter() {
   const [savingSnapshot, setSavingSnapshot] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const latestLoadRequestId = useRef(0);
 
   const isDirty = JSON.stringify(monthlyForm) !== JSON.stringify(savedMonthlyForm);
 
@@ -632,6 +622,8 @@ export function BusinessCenter() {
     signal?: AbortSignal,
     options: { preserveMonthlyForm?: boolean; silent?: boolean } = {},
   ) {
+    const requestId = ++latestLoadRequestId.current;
+
     if (!options.silent) {
       setLoading(true);
     }
@@ -643,6 +635,11 @@ export function BusinessCenter() {
         signal,
       });
       const payload = await getJson<BusinessCenterResponse>(response);
+
+      if (signal?.aborted || requestId !== latestLoadRequestId.current) {
+        return;
+      }
+
       const nextForm = monthlyToForm(payload.monthly);
       setData(payload);
       if (!options.preserveMonthlyForm) {
@@ -650,7 +647,10 @@ export function BusinessCenter() {
         setSavedMonthlyForm(nextForm);
       }
     } catch (loadError) {
-      if (loadError instanceof DOMException && loadError.name === "AbortError") {
+      if (
+        (loadError instanceof DOMException && loadError.name === "AbortError") ||
+        requestId !== latestLoadRequestId.current
+      ) {
         return;
       }
 
@@ -659,7 +659,10 @@ export function BusinessCenter() {
         setData(null);
       }
     } finally {
-      if (!signal?.aborted && !options.silent) {
+      if (
+        !signal?.aborted &&
+        requestId === latestLoadRequestId.current
+      ) {
         setLoading(false);
       }
     }
@@ -972,30 +975,34 @@ export function BusinessCenter() {
   const monthly = data?.monthly ?? null;
   const previousMonthly = data?.previous_monthly ?? null;
   const resolvedMonthlyLeads = data?.lead_analytics.monthlyActivity.total ?? null;
-  const actualCalls = monthly?.actual_sales_calls ?? (Number(monthlyForm.actual_sales_calls) || 0);
-  const actualCustomers =
-    monthly?.actual_new_customers ?? (Number(monthlyForm.actual_new_customers) || 0);
-  const actualRevenue = monthly?.actual_revenue ?? (Number(monthlyForm.actual_revenue) || 0);
+  const actualCalls = monthly?.actual_sales_calls ?? null;
+  const actualCustomers = monthly?.actual_new_customers ?? null;
+  const actualRevenue = monthly?.actual_revenue ?? null;
   const calculatedMetrics = [
     {
       label: "המרה מליד לשיחה",
-      value: safeLeadRate(actualCalls, resolvedMonthlyLeads),
+      value: calculatePercentage(actualCalls, resolvedMonthlyLeads),
       suffix: "%",
     },
     {
       label: "המרה משיחה ללקוח",
-      value: safeRate(actualCustomers, actualCalls),
+      value: calculatePercentage(actualCustomers, actualCalls),
       suffix: "%",
     },
     {
       label: "המרה מליד ללקוח",
-      value: safeLeadRate(actualCustomers, resolvedMonthlyLeads),
+      value: calculatePercentage(actualCustomers, resolvedMonthlyLeads),
       suffix: "%",
     },
     {
       label: "הכנסה ממוצעת ללקוח",
       money: true,
-      value: actualCustomers > 0 ? actualRevenue / actualCustomers : null,
+      value:
+        actualCustomers !== null &&
+        actualRevenue !== null &&
+        actualCustomers > 0
+          ? actualRevenue / actualCustomers
+          : null,
     },
   ];
   const businessInsights = getBusinessInsights(
@@ -1099,8 +1106,8 @@ export function BusinessCenter() {
             <div className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {metricDefinitions.map((definition) => {
                 const actual = definition.source === "crm"
-                  ? resolvedMonthlyLeads ?? 0
-                  : monthly?.[definition.actualKey] ?? 0;
+                  ? resolvedMonthlyLeads
+                  : monthly?.[definition.actualKey] ?? null;
                 const target = monthly?.[definition.targetKey] ?? null;
                 const previous = definition.source === "crm"
                   ? data.lead_analytics.monthlyActivity.previousTotal
@@ -1668,7 +1675,9 @@ export function BusinessCenter() {
                                   יעד עוקבים: {formatNumber(profile.followers_goal)}
                                 </span>
                                 <span className="font-bold text-gold-soft">
-                                  {followerProgress === null ? "0%" : `${formatNumber(followerProgress)}%`}
+                                  {followerProgress === null
+                                    ? "אין מספיק נתונים"
+                                    : `${formatNumber(followerProgress)}%`}
                                 </span>
                               </div>
                               <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/[0.06]">

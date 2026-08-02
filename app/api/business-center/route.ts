@@ -17,6 +17,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import type { Database } from "@/types/database";
 
 type MonthlyInsert = Database["public"]["Tables"]["business_center_monthly_metrics"]["Insert"];
+type MonthlyMetrics = Database["public"]["Tables"]["business_center_monthly_metrics"]["Row"];
 type MonthlyUpdate = Database["public"]["Tables"]["business_center_monthly_metrics"]["Update"];
 type ProfileInsert = Database["public"]["Tables"]["business_center_social_profiles"]["Insert"];
 type ProfileUpdate = Database["public"]["Tables"]["business_center_social_profiles"]["Update"];
@@ -31,6 +32,12 @@ type AttributionQueryRow = {
   content_item_id: string;
   lead_id: string;
 };
+type AttributionRowsLoadResult =
+  | Extract<ContentAttributionAnalytics, { available: false }>
+  | {
+      available: true;
+      rows: ContentAttributionAnalyticsRow[];
+    };
 
 const platforms = ["Instagram", "TikTok", "YouTube", "Facebook", "LinkedIn", "Other"] as const;
 const monthPattern = /^\d{4}-(0[1-9]|1[0-2])-01$/;
@@ -84,12 +91,11 @@ function getRelatedContent(
   return value;
 }
 
-async function getContentAttributionAnalytics(
+async function getContentAttributionRows(
   supabase: Awaited<ReturnType<typeof createServerClient>>,
   userId: string,
-  leads: BusinessCenterLeadWithSource[],
   monthStart: string,
-): Promise<ContentAttributionAnalytics> {
+): Promise<AttributionRowsLoadResult> {
   const bounds = getBusinessCenterMonthBounds(monthStart);
   const result = await supabase
     .from("business_center_lead_attributions")
@@ -121,15 +127,16 @@ async function getContentAttributionAnalytics(
     };
   }
 
-  const rows = ((result.data ?? []) as unknown as AttributionQueryRow[]).map(
-    (row): ContentAttributionAnalyticsRow => ({
-      content_item: getRelatedContent(row.content_item),
-      content_item_id: row.content_item_id,
-      lead_id: row.lead_id,
-    }),
-  );
-
-  return buildContentAttributionAnalytics(leads, rows, monthStart);
+  return {
+    available: true,
+    rows: ((result.data ?? []) as unknown as AttributionQueryRow[]).map(
+      (row): ContentAttributionAnalyticsRow => ({
+        content_item: getRelatedContent(row.content_item),
+        content_item_id: row.content_item_id,
+        lead_id: row.lead_id,
+      }),
+    ),
+  };
 }
 
 async function getContext() {
@@ -426,19 +433,12 @@ export async function GET(request: Request) {
 
   const previousMonthStart = getPreviousMonthStart(monthStart);
   const snapshotCutoff = getMonthEnd(monthStart);
-  const [monthlyResult, previousResult, profilesResult, leadsResult] = await Promise.all([
+  const [monthlyMetricsResult, profilesResult, leadsResult, attributionRowsResult] = await Promise.all([
     context.supabase
       .from("business_center_monthly_metrics")
       .select("*")
       .eq("user_id", context.user.id)
-      .eq("month_start", monthStart)
-      .maybeSingle(),
-    context.supabase
-      .from("business_center_monthly_metrics")
-      .select("*")
-      .eq("user_id", context.user.id)
-      .eq("month_start", previousMonthStart)
-      .maybeSingle(),
+      .in("month_start", [monthStart, previousMonthStart]),
     context.supabase
       .from("business_center_social_profiles")
       .select("*")
@@ -449,6 +449,11 @@ export async function GET(request: Request) {
       .from("leads")
       .select("id, created_at, full_name, next_action_date, source, status, value")
       .eq("user_id", context.user.id),
+    getContentAttributionRows(
+      context.supabase,
+      context.user.id,
+      monthStart,
+    ),
   ]);
 
   if (leadsResult.error) {
@@ -456,7 +461,7 @@ export async function GET(request: Request) {
     return jsonError("לא ניתן לטעון את נתוני הלידים מה־CRM.", 500);
   }
 
-  const firstError = monthlyResult.error ?? previousResult.error ?? profilesResult.error;
+  const firstError = monthlyMetricsResult.error ?? profilesResult.error;
   if (firstError) {
     return databaseErrorResponse(firstError, "BUSINESS_CENTER_LOAD_FAILED");
   }
@@ -499,18 +504,22 @@ export async function GET(request: Request) {
     };
   });
   const leads = (leadsResult.data ?? []) as BusinessCenterLeadWithSource[];
-  const contentAttribution = await getContentAttributionAnalytics(
-    context.supabase,
-    context.user.id,
-    leads,
-    monthStart,
-  );
+  const monthlyRows = (monthlyMetricsResult.data ?? []) as MonthlyMetrics[];
+  const contentAttribution = attributionRowsResult.available
+    ? buildContentAttributionAnalytics(
+        leads,
+        attributionRowsResult.rows,
+        monthStart,
+      )
+    : attributionRowsResult;
 
   return NextResponse.json(
     {
       content_attribution: contentAttribution,
-      monthly: monthlyResult.data ?? null,
-      previous_monthly: previousResult.data ?? null,
+      monthly:
+        monthlyRows.find((row) => row.month_start === monthStart) ?? null,
+      previous_monthly:
+        monthlyRows.find((row) => row.month_start === previousMonthStart) ?? null,
       profiles: profilesWithSnapshots,
       lead_analytics: getBusinessCenterLeadAnalytics(
         leads,

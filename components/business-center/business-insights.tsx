@@ -142,7 +142,7 @@ export function BusinessInsights({
                 className="grid w-full grid-cols-2 gap-2 rounded-2xl border border-white/[0.08] bg-black/20 p-1.5 lg:w-64"
                 role="tablist"
               >
-                <Link
+                <a
                   aria-current={period.type === "week" ? "page" : undefined}
                   aria-selected={period.type === "week"}
                   className={
@@ -154,8 +154,8 @@ export function BusinessInsights({
                   role="tab"
                 >
                   שבועי
-                </Link>
-                <Link
+                </a>
+                <a
                   aria-current={period.type === "month" ? "page" : undefined}
                   aria-selected={period.type === "month"}
                   className={
@@ -167,10 +167,10 @@ export function BusinessInsights({
                   role="tab"
                 >
                   חודשי
-                </Link>
+                </a>
               </div>
               <div className="flex w-full flex-wrap items-center justify-end gap-2">
-                <Link
+                <a
                   aria-label={`מעבר ל${period.type === "week" ? "שבוע" : "חודש"} הקודם`}
                   className="button-secondary min-h-10 gap-1.5 px-3 py-2 text-xs"
                   href={getBusinessInsightsHref(
@@ -181,9 +181,9 @@ export function BusinessInsights({
                 >
                   <ChevronRight className="h-4 w-4" />
                   קודם
-                </Link>
+                </a>
                 {!period.isCurrent ? (
-                  <Link
+                  <a
                     aria-label={`חזרה ל${period.type === "week" ? "שבוע" : "חודש"} הנוכחי`}
                     className="button-secondary min-h-10 gap-1.5 px-3 py-2 text-xs"
                     href={getBusinessInsightsHref(
@@ -194,10 +194,10 @@ export function BusinessInsights({
                   >
                     <RotateCcw className="h-3.5 w-3.5" />
                     נוכחי
-                  </Link>
+                  </a>
                 ) : null}
                 {period.nextKey ? (
-                  <Link
+                  <a
                     aria-label={`מעבר ל${period.type === "week" ? "שבוע" : "חודש"} הבא`}
                     className="button-secondary min-h-10 gap-1.5 px-3 py-2 text-xs"
                     href={getBusinessInsightsHref(
@@ -208,7 +208,7 @@ export function BusinessInsights({
                   >
                     הבא
                     <ChevronLeft className="h-4 w-4" />
-                  </Link>
+                  </a>
                 ) : (
                   <span
                     aria-disabled="true"
@@ -299,6 +299,11 @@ export function BusinessInsights({
               <p className="mt-1 text-sm leading-6 text-zinc-500">
                 קודם פעולות באיחור, ואז לידים ללא פעולה שלא עודכנו לפחות שבעה ימים.
               </p>
+              {!period.isCurrent ? (
+                <p className="mt-2 text-xs leading-5 text-zinc-500">
+                  מצב נוכחי — הרשימה משקפת את מצב הלידים כיום ואינה מוגבלת לתקופה המוצגת.
+                </p>
+              ) : null}
             </div>
           </div>
 
