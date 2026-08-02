@@ -165,9 +165,7 @@ function GroupedBarChart({
                     x={center - barWidth - 2}
                     y={CHART_BOTTOM - firstHeight}
                   >
-                    <title>
-                      {point.label} · {firstLabel}: {formatValue(point.first)}
-                    </title>
+                    <title>{`${point.label} · ${firstLabel}: ${formatValue(point.first)}`}</title>
                   </rect>
                 ) : null}
                 {point.second !== null ? (
@@ -180,9 +178,7 @@ function GroupedBarChart({
                     x={center + 2}
                     y={CHART_BOTTOM - secondHeight}
                   >
-                    <title>
-                      {point.label} · {secondLabel}: {formatValue(point.second)}
-                    </title>
+                    <title>{`${point.label} · ${secondLabel}: ${formatValue(point.second)}`}</title>
                   </rect>
                 ) : null}
                 <text
@@ -303,10 +299,7 @@ function FollowersLineChart({
                 stroke="var(--color-gold)"
                 strokeWidth="4"
               >
-                <title>
-                  {point.label} · {formatNumber(point.followers)} עוקבים · מדידה
-                  מ־{point.snapshotDate}
-                </title>
+                <title>{`${point.label} · ${formatNumber(point.followers)} עוקבים · מדידה מ־${point.snapshotDate}`}</title>
               </circle>
               <text
                 fill="var(--text-muted)"
@@ -426,7 +419,7 @@ export function BusinessInsightsCharts({
                       <th>{point.label}</th>
                       <td>
                         {point.closeRatio === null
-                          ? "לא זמין"
+                          ? "אין מספיק נתונים"
                           : `${formatNumber(point.closeRatio)}%`}
                       </td>
                     </tr>
