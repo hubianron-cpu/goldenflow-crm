@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { hasSupabaseEnv } from "@/lib/env";
+import { NEW_LEAD_STATUS_VALUES } from "@/lib/leads";
 import { createServerClient } from "@/lib/supabase/server";
 
 export default async function DashboardLayout({
@@ -22,7 +23,11 @@ export default async function DashboardLayout({
   }
 
   const [{ count: leadsCount }, { count: tasksCount }] = await Promise.all([
-    supabase.from("leads").select("id", { count: "exact", head: true }).eq("user_id", user.id),
+    supabase
+      .from("leads")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", user.id)
+      .in("status", NEW_LEAD_STATUS_VALUES),
     supabase
       .from("tasks")
       .select("id", { count: "exact", head: true })

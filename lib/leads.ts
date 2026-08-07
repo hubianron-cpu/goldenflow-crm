@@ -43,6 +43,13 @@ const LEGACY_STATUS_MAP: Record<string, LeadStatus> = {
   "נסגר": "נסגר בהצלחה",
 };
 
+export const NEW_LEAD_STATUS_VALUES = [
+  LEAD_STATUSES[0].value,
+  ...Object.entries(LEGACY_STATUS_MAP)
+    .filter(([, canonicalStatus]) => canonicalStatus === LEAD_STATUSES[0].value)
+    .map(([legacyStatus]) => legacyStatus),
+];
+
 export type LeadStatus = (typeof LEAD_STATUSES)[number]["value"];
 export type NextActionType = (typeof NEXT_ACTION_TYPES)[number]["value"];
 export type Priority = (typeof PRIORITIES)[number]["value"];
