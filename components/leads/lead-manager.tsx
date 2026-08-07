@@ -13,6 +13,7 @@ import {
   getLeadTemperature,
   getDaysSinceLastActivity,
   getNextActionLabel,
+  isFinalLeadStatus,
   normalizeLeadStatus,
   getPriorityColor,
   getPriorityLabel,
@@ -71,6 +72,14 @@ function formatDaysSinceActivity(lead: Lead) {
 function formatStuckLeadLabel(lead: Lead) {
   const days = getDaysSinceLastActivity(lead);
   return days >= 999 ? "מחכה לפעולה — כדאי לבדוק היום" : `תקוע ${days} ימים — צריך פולואפ`;
+}
+
+function isAutomaticSalesActionEligible(lead: Pick<Lead, "status">) {
+  return !isFinalLeadStatus(lead.status);
+}
+
+function getSalesPriorityScore(lead: Lead) {
+  return isAutomaticSalesActionEligible(lead) ? getLeadScore(lead) : -1;
 }
 
 function formatLeadSourceLabel(source: string | null) {
@@ -260,7 +269,12 @@ export function LeadManager() {
     endOfToday.setHours(23, 59, 59, 999);
 
     return leads
-      .filter((lead) => lead.next_action_date && new Date(lead.next_action_date).getTime() <= endOfToday.getTime())
+      .filter(
+        (lead) =>
+          isAutomaticSalesActionEligible(lead) &&
+          lead.next_action_date &&
+          new Date(lead.next_action_date).getTime() <= endOfToday.getTime(),
+      )
       .sort((a, b) => getUrgencyTime(a) - getUrgencyTime(b));
   }, [leads]);
 
@@ -277,7 +291,7 @@ export function LeadManager() {
       .sort((a, b) => {
         if (sort === "score_desc") {
           return (
-            getLeadScore(b) - getLeadScore(a) ||
+            getSalesPriorityScore(b) - getSalesPriorityScore(a) ||
             (b.value || 0) - (a.value || 0) ||
             getDaysSinceLastActivity(b) - getDaysSinceLastActivity(a)
           );
@@ -432,6 +446,10 @@ export function LeadManager() {
   }
 
   function completeAction(lead: Lead) {
+    if (!isAutomaticSalesActionEligible(lead)) {
+      return;
+    }
+
     const nextStatus = getActionCompletedStatus(lead.status);
     const now = new Date().toISOString();
 
@@ -829,22 +847,24 @@ export function LeadManager() {
                   {filteredLeads.map((lead) => (
                     <tr
                       key={lead.id}
-                      className={`align-top ${getLeadScore(lead) >= 80 ? "bg-gold/[0.04]" : ""}`}
+                      className={`align-top ${isAutomaticSalesActionEligible(lead) && getLeadScore(lead) >= 80 ? "bg-gold/[0.04]" : ""}`}
                     >
                       <td className="px-5 py-4">
                         <p className="font-medium text-white">{lead.name}</p>
                         <p className="mt-1 text-zinc-300">{lead.phone || "ללא טלפון"}</p>
                         <p className="mt-1 text-xs text-zinc-500">{formatLeadSourceLabel(lead.source)}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
-                            {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
-                          </span>
-                          {getDaysSinceLastActivity(lead) > 2 ? (
-                            <span className="rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1 text-xs text-red-200">
-                              ⚠️ {formatStuckLeadLabel(lead)}
+                        {isAutomaticSalesActionEligible(lead) ? (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
+                              {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
                             </span>
-                          ) : null}
-                        </div>
+                            {getDaysSinceLastActivity(lead) > 2 ? (
+                              <span className="rounded-full border border-danger/30 bg-danger/10 px-2.5 py-1 text-xs text-red-200">
+                                ⚠️ {formatStuckLeadLabel(lead)}
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-5 py-4">
                         <p className="font-semibold text-white">{formatMoney(lead.value)}</p>
@@ -852,9 +872,11 @@ export function LeadManager() {
                           {getPriorityLabel(lead.priority)}
                         </span>
                         <p className="mt-2 text-xs text-zinc-500">{lead.deal_probability}% הסתברות</p>
-                        <p className={getDaysSinceLastActivity(lead) > 2 ? "mt-1 text-xs text-red-200" : "mt-1 text-xs text-zinc-500"}>
-                          למה לטפל היום: {formatDaysSinceActivity(lead)}
-                        </p>
+                        {isAutomaticSalesActionEligible(lead) ? (
+                          <p className={getDaysSinceLastActivity(lead) > 2 ? "mt-1 text-xs text-red-200" : "mt-1 text-xs text-zinc-500"}>
+                            למה לטפל היום: {formatDaysSinceActivity(lead)}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-5 py-4">
                         <span className={`rounded-full border px-3 py-1 text-xs ${getLeadStatusColor(lead.status)}`}>
@@ -884,28 +906,32 @@ export function LeadManager() {
                         </details>
                       </td>
                       <td className="px-5 py-4">
-                        <p className={isOverdue(lead.next_action_date) ? "font-medium text-red-200" : "text-zinc-300"}>
-                          {formatNextAction(lead)}
-                        </p>
-                        <p className="mt-1 text-xs text-zinc-500">{getNextActionLabel(lead.next_action_type)}</p>
-                        <details className="group mt-3">
-                          <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-xs [&::-webkit-details-marker]:hidden">
-                            עדכון מעקב
-                          </summary>
-                          <form className="mt-2 space-y-2 rounded-xl border border-white/10 bg-black/20 p-2" onSubmit={(event) => handleFollowUp(event, lead.id)}>
-                            <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
-                            <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
-                              {NEXT_ACTION_TYPES.map((type) => (
-                                <option key={type.value} value={type.value}>
-                                  {type.label}
-                                </option>
-                              ))}
-                            </select>
-                            <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
-                              שמירת מעקב
-                            </button>
-                          </form>
-                        </details>
+                        {isAutomaticSalesActionEligible(lead) ? (
+                          <>
+                            <p className={isOverdue(lead.next_action_date) ? "font-medium text-red-200" : "text-zinc-300"}>
+                              {formatNextAction(lead)}
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-500">{getNextActionLabel(lead.next_action_type)}</p>
+                            <details className="group mt-3">
+                              <summary className="button-secondary min-h-10 w-full cursor-pointer list-none py-2 text-center text-xs [&::-webkit-details-marker]:hidden">
+                                עדכון מעקב
+                              </summary>
+                              <form className="mt-2 space-y-2 rounded-xl border border-white/10 bg-black/20 p-2" onSubmit={(event) => handleFollowUp(event, lead.id)}>
+                                <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
+                                <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
+                                  {NEXT_ACTION_TYPES.map((type) => (
+                                    <option key={type.value} value={type.value}>
+                                      {type.label}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button className="button-secondary w-full py-2" disabled={isPending} type="submit">
+                                  שמירת מעקב
+                                </button>
+                              </form>
+                            </details>
+                          </>
+                        ) : null}
                       </td>
                       <td className="px-5 py-4">
                         <p className="line-clamp-3 text-sm text-zinc-400">{lead.notes || "אין הערה שמורה"}</p>
@@ -928,14 +954,16 @@ export function LeadManager() {
                         </details>
                       </td>
                       <td className="px-5 py-4">
-                        <button
-                          className="button-primary mb-3 w-full py-2"
-                          disabled={isPending}
-                          onClick={() => completeAction(lead)}
-                          type="button"
-                        >
-                          ✔ סיימתי פעולה
-                        </button>
+                        {isAutomaticSalesActionEligible(lead) ? (
+                          <button
+                            className="button-primary mb-3 w-full py-2"
+                            disabled={isPending}
+                            onClick={() => completeAction(lead)}
+                            type="button"
+                          >
+                            ✔ סיימתי פעולה
+                          </button>
+                        ) : null}
                         <div className="mb-3">
                           {renderWhatsAppCenter(lead)}
                         </div>
@@ -996,26 +1024,28 @@ export function LeadManager() {
               {filteredLeads.map((lead) => (
                 <article
                   key={lead.id}
-                  className={`p-4 ${getLeadScore(lead) >= 80 ? "border-r-2 border-gold bg-gold/[0.04]" : ""}`}
+                  className={`p-4 ${isAutomaticSalesActionEligible(lead) && getLeadScore(lead) >= 80 ? "border-r-2 border-gold bg-gold/[0.04]" : ""}`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <h3 className="font-medium">{lead.name}</h3>
                       <p className="mt-1 text-sm text-zinc-400">{lead.phone || "ללא טלפון"}</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
-                          {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
-                        </span>
-                        <span
-                          className={`rounded-full border px-2.5 py-1 text-xs ${
-                            getDaysSinceLastActivity(lead) > 2
-                              ? "border-danger/30 bg-danger/10 text-red-200"
-                              : "border-white/10 bg-white/5 text-zinc-400"
-                          }`}
-                        >
-                          {getDaysSinceLastActivity(lead) > 2 ? `⚠️ ${formatStuckLeadLabel(lead)}` : formatDaysSinceActivity(lead)}
-                        </span>
-                      </div>
+                      {isAutomaticSalesActionEligible(lead) ? (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <span className={`rounded-full border px-2.5 py-1 text-xs ${getLeadTemperature(lead).color}`}>
+                            {getLeadTemperature(lead).label} · {getLeadTemperature(lead).score} — לטיפול היום
+                          </span>
+                          <span
+                            className={`rounded-full border px-2.5 py-1 text-xs ${
+                              getDaysSinceLastActivity(lead) > 2
+                                ? "border-danger/30 bg-danger/10 text-red-200"
+                                : "border-white/10 bg-white/5 text-zinc-400"
+                            }`}
+                          >
+                            {getDaysSinceLastActivity(lead) > 2 ? `⚠️ ${formatStuckLeadLabel(lead)}` : formatDaysSinceActivity(lead)}
+                          </span>
+                        </div>
+                      ) : null}
                     </div>
                     <span className={`rounded-full border px-3 py-1 text-xs ${getPriorityColor(lead.priority)}`}>
                       {getPriorityLabel(lead.priority)}
@@ -1027,22 +1057,26 @@ export function LeadManager() {
                       <p className="text-xs text-zinc-500">שווי</p>
                       <p className="mt-1 font-semibold">{formatMoney(lead.value)}</p>
                     </div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-3">
-                      <p className="text-xs text-zinc-500">מעקב הבא</p>
-                      <p className={isOverdue(lead.next_action_date) ? "mt-1 font-medium text-red-200" : "mt-1 text-zinc-300"}>
-                        {formatNextAction(lead)}
-                      </p>
-                    </div>
+                    {isAutomaticSalesActionEligible(lead) ? (
+                      <div className="rounded-lg border border-white/10 bg-white/5 p-3">
+                        <p className="text-xs text-zinc-500">מעקב הבא</p>
+                        <p className={isOverdue(lead.next_action_date) ? "mt-1 font-medium text-red-200" : "mt-1 text-zinc-300"}>
+                          {formatNextAction(lead)}
+                        </p>
+                      </div>
+                    ) : null}
                   </div>
 
-                  <button
-                    className="button-primary mt-4 w-full py-2"
-                    disabled={isPending}
-                    onClick={() => completeAction(lead)}
-                    type="button"
-                  >
-                    ✔ סיימתי פעולה
-                  </button>
+                  {isAutomaticSalesActionEligible(lead) ? (
+                    <button
+                      className="button-primary mt-4 w-full py-2"
+                      disabled={isPending}
+                      onClick={() => completeAction(lead)}
+                      type="button"
+                    >
+                      ✔ סיימתי פעולה
+                    </button>
+                  ) : null}
                   <div className="mt-3">
                     {renderWhatsAppCenter(lead)}
                   </div>
@@ -1072,19 +1106,21 @@ export function LeadManager() {
                         </div>
                       </div>
 
-                      <form className="grid gap-2 sm:grid-cols-[1fr_150px_auto]" onSubmit={(event) => handleFollowUp(event, lead.id)}>
-                        <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
-                        <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
-                          {NEXT_ACTION_TYPES.map((type) => (
-                            <option key={type.value} value={type.value}>
-                              {type.label}
-                            </option>
-                          ))}
-                        </select>
-                        <button className="button-secondary py-2" disabled={isPending} type="submit">
-                          שמירה
-                        </button>
-                      </form>
+                      {isAutomaticSalesActionEligible(lead) ? (
+                        <form className="grid gap-2 sm:grid-cols-[1fr_150px_auto]" onSubmit={(event) => handleFollowUp(event, lead.id)}>
+                          <input className="field py-2" defaultValue={toInputDateTime(lead.next_action_date)} name="next_action_date" type="datetime-local" />
+                          <select className="field py-2" defaultValue={lead.next_action_type ?? "follow-up"} name="next_action_type">
+                            {NEXT_ACTION_TYPES.map((type) => (
+                              <option key={type.value} value={type.value}>
+                                {type.label}
+                              </option>
+                            ))}
+                          </select>
+                          <button className="button-secondary py-2" disabled={isPending} type="submit">
+                            שמירה
+                          </button>
+                        </form>
+                      ) : null}
 
                       <form onSubmit={(event) => handleNote(event, lead.id)}>
                         <textarea className="field min-h-20 resize-none" defaultValue={lead.notes ?? ""} name="notes" placeholder="סיכום שיחה..." />

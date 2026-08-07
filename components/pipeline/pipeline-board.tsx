@@ -7,6 +7,7 @@ import { StatusMessage } from "@/components/status-message";
 import {
   getActionCompletedStatus,
   getLeadStatusColor,
+  isFinalLeadStatus,
   normalizeLeadStatus,
   getPriorityColor,
   getPriorityLabel,
@@ -64,6 +65,21 @@ function getApiErrorMessage(payload: Record<string, unknown>, fallback: string) 
   ]
     .filter(Boolean)
     .join(" ") || fallback;
+}
+
+function getPipelineStage(status: string): LeadStatus | null {
+  const isTerminal = isFinalLeadStatus(status);
+  const normalizedStatus = normalizeLeadStatus(status);
+
+  if (
+    isTerminal &&
+    normalizedStatus !== LEAD_STATUSES[6].value &&
+    normalizedStatus !== LEAD_STATUSES[7].value
+  ) {
+    return null;
+  }
+
+  return normalizedStatus;
 }
 
 export function PipelineBoard() {
@@ -151,7 +167,7 @@ export function PipelineBoard() {
   const groupedLeads = useMemo(
     () =>
       LEAD_STATUSES.map((stage) => {
-        const stageLeads = leads.filter((lead) => normalizeLeadStatus(lead.status) === stage.value);
+        const stageLeads = leads.filter((lead) => getPipelineStage(lead.status) === stage.value);
         const totalValue = stageLeads.reduce((sum, lead) => sum + (lead.value || 0), 0);
 
         return {

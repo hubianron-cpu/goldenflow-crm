@@ -1,4 +1,5 @@
 import {
+  isFinalLeadStatus,
   LEAD_STATUSES,
   normalizeLeadStatus,
   type LeadStatus,
@@ -279,6 +280,21 @@ function limitGroup(items: BusinessCenterPriorityLead[]): BusinessCenterPriority
   };
 }
 
+function getBusinessCenterStage(status: string): LeadStatus | null {
+  const isTerminal = isFinalLeadStatus(status);
+  const normalizedStatus = normalizeLeadStatus(status);
+
+  if (
+    isTerminal &&
+    normalizedStatus !== "נסגר בהצלחה" &&
+    normalizedStatus !== "לא רלוונטי"
+  ) {
+    return null;
+  }
+
+  return normalizedStatus;
+}
+
 export function getBusinessCenterLeadAnalytics(
   leads: BusinessCenterLeadSource[],
   monthStart: string,
@@ -295,12 +311,9 @@ export function getBusinessCenterLeadAnalytics(
     return createdAt >= monthBounds.previousStart && createdAt < monthBounds.currentStart;
   }).length;
   const normalizedMonthlyStatuses = monthlyLeads.map((lead) =>
-    normalizeLeadStatus(lead.status),
+    getBusinessCenterStage(lead.status),
   );
-  const openLeads = leads.filter((lead) => {
-    const status = normalizeLeadStatus(lead.status);
-    return status !== "נסגר בהצלחה" && status !== "לא רלוונטי";
-  });
+  const openLeads = leads.filter((lead) => !isFinalLeadStatus(lead.status));
   const priorityLeads = openLeads.map((lead) =>
     toPriorityLead(
       lead,
@@ -343,7 +356,7 @@ export function getBusinessCenterLeadAnalytics(
         (status) => status === "לא רלוונטי",
       ).length,
       currentOpen: normalizedMonthlyStatuses.filter(
-        (status) => status !== "נסגר בהצלחה" && status !== "לא רלוונטי",
+        (status) => status !== null && status !== "נסגר בהצלחה" && status !== "לא רלוונטי",
       ).length,
       currentWon: normalizedMonthlyStatuses.filter(
         (status) => status === "נסגר בהצלחה",
@@ -355,7 +368,7 @@ export function getBusinessCenterLeadAnalytics(
     },
     pipeline: BUSINESS_CENTER_LEAD_STAGES.map((stage) => ({
       count: leads.filter(
-        (lead) => normalizeLeadStatus(lead.status) === stage.value,
+        (lead) => getBusinessCenterStage(lead.status) === stage.value,
       ).length,
       label: stage.label,
       priorityGroup: stage.priorityGroup,
