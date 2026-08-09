@@ -364,11 +364,17 @@ export function LeadManager() {
       if (typeof payload.taskSyncError === "string" && payload.taskSyncError) {
         setError(payload.taskSyncError);
         await loadLeads();
+        if ("status" in body) {
+          router.refresh();
+        }
         return;
       }
 
       setSuccess(message);
       await loadLeads();
+      if ("status" in body) {
+        router.refresh();
+      }
     });
   }
 
@@ -438,6 +444,7 @@ export function LeadManager() {
       }
 
       await loadLeads();
+      router.refresh();
     });
   }
 
@@ -524,6 +531,7 @@ export function LeadManager() {
       setLeadToDelete(null);
       setSuccess("הליד נמחק לצמיתות.");
       await loadLeads();
+      router.refresh();
     });
   }
 

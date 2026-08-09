@@ -72,6 +72,7 @@ function sanitizeTaskPayload(payload: TaskPayload) {
 }
 
 function revalidateTaskPaths() {
+  revalidatePath("/", "layout");
   revalidatePath("/dashboard");
   revalidatePath("/tasks");
 }
@@ -119,7 +120,7 @@ export async function signIn(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    redirect(`/login?error=${encodeMessage(getErrorMessage(error))}`);
+    redirect(`/login?error=${encodeMessage("האימייל או הסיסמה אינם נכונים. נסה שוב.")}`);
   }
 
   redirect("/dashboard");
