@@ -955,6 +955,7 @@ export async function DELETE(request: Request) {
   revalidatePath("/dashboard");
   revalidatePath("/leads");
   revalidatePath("/pipeline");
+  revalidatePath("/", "layout");
 
   return NextResponse.json({ deletedLead: data }, { status: 200 });
 }

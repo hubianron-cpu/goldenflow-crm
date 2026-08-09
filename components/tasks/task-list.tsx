@@ -761,7 +761,10 @@ export function TaskList({
                 תאריך יעד
                 <input
                   className="field mt-2"
-                  onChange={(event) => setForm((current) => ({ ...current, due_date: event.target.value }))}
+                  onInput={(event) => {
+                    const dueDate = event.currentTarget.value;
+                    setForm((current) => ({ ...current, due_date: dueDate }));
+                  }}
                   type="date"
                   value={form.due_date}
                 />

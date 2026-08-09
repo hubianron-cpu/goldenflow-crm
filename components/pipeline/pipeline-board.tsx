@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { GripVertical, MessageCircle, PhoneCall } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { LoadingCard } from "@/components/loading-card";
 import { StatusMessage } from "@/components/status-message";
 import {
@@ -83,6 +84,7 @@ function getPipelineStage(status: string): LeadStatus | null {
 }
 
 export function PipelineBoard() {
+  const router = useRouter();
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -202,11 +204,17 @@ export function PipelineBoard() {
       if (typeof payload.taskSyncError === "string" && payload.taskSyncError) {
         setError(payload.taskSyncError);
         await loadLeads();
+        if (fields.status !== undefined) {
+          router.refresh();
+        }
         return;
       }
 
       setSuccess(message);
       await loadLeads();
+      if (fields.status !== undefined) {
+        router.refresh();
+      }
     });
   }
 
