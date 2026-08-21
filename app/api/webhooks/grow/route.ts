@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 
@@ -16,7 +16,14 @@ type SupabaseErrorLike = {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const SHA256_HEX_PATTERN = /^[0-9a-f]{64}$/;
 const FAILURE_WORDS = ["fail", "failed", "failure", "declined", "denied", "error", "cancel", "cancelled", "rejected", "refused", "סורב", "נכשל"];
+const TEST_EMAIL_ALIASES = ["payerEmail", "email", "customerEmail", "payer_email", "clientEmail"];
+const TRANSACTION_ALIASES = ["transactionCode", "transactionId"] as const;
+const AMOUNT_ALIASES = ["paymentSum", "sum"] as const;
+const MAX_STATUS_LENGTH = 64;
+const MAX_AMOUNT_LENGTH = 64;
+const MAX_PAYMENT_DATE_LENGTH = 128;
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status });
@@ -132,6 +139,28 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
+function getConfiguredCaptureEmailDigest() {
+  const digest = process.env.GROW_CAPTURE_TEST_EMAIL_SHA256?.trim().toLowerCase() || "";
+  return SHA256_HEX_PATTERN.test(digest) ? digest : "";
+}
+
+function isControlledCaptureIdentity(payload: WebhookPayload) {
+  const expectedDigest = getConfiguredCaptureEmailDigest();
+
+  if (!expectedDigest) {
+    return false;
+  }
+
+  const normalizedEmail = normalizeEmail(getField(payload, TEST_EMAIL_ALIASES));
+
+  if (!normalizedEmail) {
+    return false;
+  }
+
+  const actualDigest = createHash("sha256").update(normalizedEmail, "utf8").digest("hex");
+  return safeSecretEquals(actualDigest, expectedDigest);
+}
+
 function normalizePaymentSum(value: string) {
   if (!value) {
     return null;
@@ -186,6 +215,130 @@ function findNestedValue(source: unknown, keys: string[]): unknown {
 
 function getField(payload: WebhookPayload, keys: string[]) {
   return cleanText(findNestedValue(payload, keys));
+}
+
+function getContentTypeCategory(request: Request) {
+  const contentType = request.headers.get("content-type")?.toLowerCase() || "";
+
+  if (contentType.includes("application/json")) {
+    return "json";
+  }
+
+  if (contentType.includes("multipart/form-data")) {
+    return "multipart-form-data";
+  }
+
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    return "form-urlencoded";
+  }
+
+  return contentType ? "other" : "missing";
+}
+
+function getPrimitiveType(value: unknown) {
+  if (value === null) {
+    return "null";
+  }
+
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return typeof value;
+  }
+
+  return "INVALID/NON-SCALAR";
+}
+
+function getBoundedScalar(value: unknown, maxLength: number) {
+  const primitiveType = getPrimitiveType(value);
+
+  if (primitiveType === "INVALID/NON-SCALAR") {
+    return { primitiveType, value: "INVALID/NON-SCALAR" };
+  }
+
+  if (value === null) {
+    return { primitiveType, value: null };
+  }
+
+  const stringValue = String(value);
+
+  if (stringValue.length > maxLength) {
+    return { primitiveType: "INVALID/OVERSIZED", value: "INVALID/OVERSIZED" };
+  }
+
+  return { primitiveType, value };
+}
+
+function getAliasEvidence(payload: WebhookPayload, aliases: readonly string[], maxLength: number) {
+  const presentAliases = aliases
+    .map((alias) => ({ alias, value: findNestedValue(payload, [alias]) }))
+    .filter((candidate) => candidate.value !== undefined);
+
+  if (!presentAliases.length) {
+    return {
+      aliasConflict: false,
+      aliasName: null,
+      identityPresent: false,
+      primitiveType: "missing",
+      value: null,
+    };
+  }
+
+  const scalarRepresentations = presentAliases.map(({ value }) => {
+    const primitiveType = getPrimitiveType(value);
+    return primitiveType === "INVALID/NON-SCALAR" ? primitiveType : `${primitiveType}:${String(value)}`;
+  });
+  const aliasConflict = new Set(scalarRepresentations).size > 1;
+
+  if (aliasConflict) {
+    return {
+      aliasConflict: true,
+      aliasName: "CONFLICT",
+      identityPresent: true,
+      primitiveType: "conflict",
+      value: null,
+    };
+  }
+
+  const selected = presentAliases[0];
+  const bounded = getBoundedScalar(selected.value, maxLength);
+
+  return {
+    aliasConflict: false,
+    aliasName: selected.alias,
+    identityPresent: cleanText(selected.value).length > 0,
+    primitiveType: bounded.primitiveType,
+    value: bounded.value,
+  };
+}
+
+function getSanitizedCaptureEvidence(request: Request, payload: WebhookPayload) {
+  const rawStatus = findNestedValue(payload, ["status"]);
+  const boundedStatus = rawStatus === undefined
+    ? { primitiveType: "missing", value: null }
+    : getBoundedScalar(rawStatus, MAX_STATUS_LENGTH);
+  const transaction = getAliasEvidence(payload, TRANSACTION_ALIASES, 0);
+  const amount = getAliasEvidence(payload, AMOUNT_ALIASES, MAX_AMOUNT_LENGTH);
+  const rawPaymentDate = findNestedValue(payload, ["paymentDate"]);
+  const paymentDatePresent = rawPaymentDate !== undefined;
+  const paymentDate = paymentDatePresent
+    ? getBoundedScalar(rawPaymentDate, MAX_PAYMENT_DATE_LENGTH)
+    : { primitiveType: "missing", value: null };
+
+  return {
+    amountAliasName: amount.aliasConflict ? "CONFLICTING AMOUNT ALIASES" : amount.aliasName,
+    contentTypeCategory: getContentTypeCategory(request),
+    method: request.method,
+    normalizedStatusValue:
+      typeof boundedStatus.value === "string"
+        ? boundedStatus.value.trim().toLowerCase()
+        : boundedStatus.value,
+    paymentDatePresent,
+    rawAmountPrimitiveType: amount.primitiveType,
+    rawAmountValue: amount.value,
+    rawPaymentDatePrimitiveType: paymentDate.primitiveType,
+    rawPaymentDateValue: paymentDate.value,
+    transactionAliasName: transaction.aliasConflict ? "CONFLICTING TRANSACTION ALIASES" : transaction.aliasName,
+    transactionIdentityPresent: transaction.identityPresent,
+  };
 }
 
 function getJsonPayloadForStorage(payload: WebhookPayload): Json {
@@ -533,6 +686,11 @@ export async function POST(request: Request) {
 
   console.info("Grow webhook verified");
   console.info("GROW_WEBHOOK_VERIFIED", { source: webhookAuth.source });
+
+  if (isControlledCaptureIdentity(payload)) {
+    console.info("GROW_TEMP_SANITIZED_CAPTURE", getSanitizedCaptureEvidence(request, payload));
+    return jsonResponse({ captured: true, ok: true, processed: false });
+  }
 
   const adminClientResult = getWebhookAdminClient();
   console.info("GROW_SUPABASE_ADMIN_CLIENT_READY", {
