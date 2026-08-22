@@ -1136,7 +1136,7 @@ export function BusinessCenter() {
             </div>
 
             <details className="group mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.025] p-4">
-              <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300 [&::-webkit-details-marker]:hidden">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 text-sm font-black text-zinc-300 [&::-webkit-details-marker]:hidden">
                 מדדי המרה נוספים
                 <ChevronDown className="h-4 w-4 shrink-0 text-zinc-500 transition group-open:rotate-180" />
               </summary>

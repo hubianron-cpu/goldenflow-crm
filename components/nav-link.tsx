@@ -41,6 +41,15 @@ function NavLink({
           : "border-white/[0.06] bg-white/[0.025] text-zinc-400 hover:-translate-y-0.5 hover:border-gold/30 hover:bg-gold/10 hover:text-white hover:shadow-[0_0_26px_rgba(201,162,39,0.10)]",
       )}
       href={href}
+      onClick={(event) => {
+        const mobileNavigationToggle = event.currentTarget
+          .closest("aside")
+          ?.querySelector<HTMLInputElement>("#mobile-navigation-toggle");
+
+        if (mobileNavigationToggle) {
+          mobileNavigationToggle.checked = false;
+        }
+      }}
     >
       <span
         className={cn(

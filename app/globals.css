@@ -175,6 +175,16 @@ option {
   @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs font-bold text-zinc-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] transition duration-200 hover:-translate-y-0.5 hover:border-gold/35 hover:text-gold-soft active:scale-[0.97];
 }
 
+@media (max-width: 1023px) {
+  .field,
+  .field input,
+  .field select,
+  .field textarea,
+  .theme-toggle select {
+    font-size: 16px;
+  }
+}
+
 html.theme-light .panel,
 html.theme-light .card-default {
   border-color: var(--color-border);

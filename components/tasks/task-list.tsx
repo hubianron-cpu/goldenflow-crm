@@ -715,12 +715,12 @@ export function TaskList({
       </section>
 
       {isModalOpen ? (
-        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/75 px-4 py-8 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/75 px-3 py-4 backdrop-blur-sm sm:px-4 sm:py-8">
           <div
             aria-describedby="task-dialog-description"
             aria-labelledby="task-dialog-title"
             aria-modal="true"
-            className="w-full max-w-2xl rounded-[28px] border border-gold/20 bg-zinc-950 p-6 shadow-[0_28px_90px_rgba(0,0,0,0.55)]"
+            className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-gold/20 bg-zinc-950 p-4 shadow-[0_28px_90px_rgba(0,0,0,0.55)] sm:max-h-[calc(100dvh-4rem)] sm:p-6"
             ref={taskDialogRef}
             role="dialog"
             tabIndex={-1}
