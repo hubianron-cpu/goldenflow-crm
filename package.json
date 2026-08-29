@@ -6,8 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --ignore-pattern .next --ignore-pattern next-env.d.ts",
-    "typecheck": "tsc --noEmit"
+    "lint": "eslint . --ignore-pattern .next --ignore-pattern .test-dist --ignore-pattern next-env.d.ts",
+    "typecheck": "tsc --noEmit",
+    "test:lead-followups": "tsc -p tests/tsconfig.json && node --test .test-dist/tests/lead-followups.test.js",
+    "agent:credential": "node scripts/create-lead-followups-credential.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

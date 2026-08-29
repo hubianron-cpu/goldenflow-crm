@@ -1,0 +1,226 @@
+openapi: 3.1.0
+info:
+  title: GoldenFlow CRM Lead Follow-ups API
+  version: 1.0.0
+  description: Read-only access to due and deterministic suggested sales follow-ups in GoldenFlow CRM.
+servers:
+  - url: https://app.goldenflowcrm.com
+    description: GoldenFlow CRM production
+paths:
+  /api/agents/lead-followups:
+    get:
+      operationId: getLeadFollowups
+      summary: Get lead follow-ups
+      description: Get GoldenFlow CRM leads that currently require or are recommended for sales follow-up.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: date
+          in: query
+          required: false
+          description: Optional effective date for QA or historical inspection. Defaults to the current date in Asia/Jerusalem.
+          schema:
+            type: string
+            format: date
+            pattern: '^\d{4}-\d{2}-\d{2}$'
+        - name: priority
+          in: query
+          required: false
+          description: Return only one priority level.
+          schema:
+            type: string
+            enum: [P1, P2, P3]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of returned items.
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: include_recovery
+          in: query
+          required: false
+          description: Include low-priority recovery candidates.
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: Follow-ups loaded successfully.
+          headers:
+            Cache-Control:
+              description: Prevents caching of live CRM follow-up data.
+              schema:
+                type: string
+                example: no-store, max-age=0
+            X-Request-Id:
+              description: Safe request correlation identifier.
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadFollowupsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: GoldenFlow scoped integration token
+      description: A revocable GoldenFlow token with the lead_followups:read scope.
+  responses:
+    BadRequest:
+      description: Invalid query parameters.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing, invalid, expired, or revoked credential.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Credential lacks scope or the mapped account lacks subscription access.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Internal failure without sensitive implementation details.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, request_id]
+      properties:
+        error:
+          type: string
+        request_id:
+          type: string
+          format: uuid
+    FollowupCounts:
+      type: object
+      additionalProperties: false
+      required: [due, suggested, recovery, p1, p2, p3]
+      properties:
+        due:
+          type: integer
+          minimum: 0
+        suggested:
+          type: integer
+          minimum: 0
+        recovery:
+          type: integer
+          minimum: 0
+        p1:
+          type: integer
+          minimum: 0
+        p2:
+          type: integer
+          minimum: 0
+        p3:
+          type: integer
+          minimum: 0
+    LeadFollowupItem:
+      type: object
+      additionalProperties: false
+      required:
+        - lead_id
+        - name
+        - followup_type
+        - priority
+        - score
+        - primary_source_rule
+        - pipeline_stage
+        - last_meaningful_activity_at
+        - next_followup_at
+        - reason
+        - recommended_action
+      properties:
+        lead_id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        followup_type:
+          type: string
+          enum: [due, suggested, recovery]
+        priority:
+          type: string
+          enum: [P1, P2, P3]
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        primary_source_rule:
+          type: string
+          enum:
+            - explicit_overdue_followup
+            - explicit_followup_today
+            - new_lead_no_contact
+            - recovery
+        pipeline_stage:
+          type: string
+        last_meaningful_activity_at:
+          type: [string, 'null']
+          format: date-time
+        next_followup_at:
+          type: [string, 'null']
+          format: date-time
+        reason:
+          type: string
+        recommended_action:
+          type: string
+    LeadFollowupsResponse:
+      type: object
+      additionalProperties: false
+      required: [effective_date, timezone, generated_at, counts, items, warnings]
+      properties:
+        effective_date:
+          type: string
+          format: date
+        timezone:
+          type: string
+          const: Asia/Jerusalem
+        generated_at:
+          type: string
+          format: date-time
+        counts:
+          $ref: '#/components/schemas/FollowupCounts'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/LeadFollowupItem'
+        warnings:
+          type: array
+          items:
+            type: string

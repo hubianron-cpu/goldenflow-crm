@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      agent_integration_credentials: {
+        Row: {
+          created_at: string;
+          expires_at: string | null;
+          id: string;
+          name: string;
+          revoked_at: string | null;
+          scopes: string[];
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          name: string;
+          revoked_at?: string | null;
+          scopes: string[];
+          token_hash: string;
+          token_prefix: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          expires_at?: string | null;
+          id?: string;
+          name?: string;
+          revoked_at?: string | null;
+          scopes?: string[];
+          token_hash?: string;
+          token_prefix?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       users: {
         Row: {
           created_at: string;
