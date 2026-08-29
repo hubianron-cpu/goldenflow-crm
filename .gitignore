@@ -8,6 +8,7 @@ out
 # Production build
 build
 dist
+.test-dist
 
 # Environment variables
 .env
