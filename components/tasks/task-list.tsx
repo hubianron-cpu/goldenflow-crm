@@ -103,7 +103,7 @@ function formatMoney(value: number | null | undefined) {
 }
 
 function isCompleted(task: Task) {
-  return normalizeTaskStatus(task.status) === "הושלמה";
+  return Boolean(task.completed_at) || normalizeTaskStatus(task.status) === "הושלמה";
 }
 
 function isOverdue(task: Task) {
