@@ -32,7 +32,10 @@ export default async function DashboardLayout({
       .from("tasks")
       .select("id", { count: "exact", head: true })
       .or(`user_id.eq.${user.id},assigned_to.eq.${user.id}`)
-      .is("deleted_at", null),
+      .is("deleted_at", null)
+      .is("completed_at", null)
+      .neq("status", "הושלמה")
+      .neq("status", "done"),
   ]);
 
   return (
