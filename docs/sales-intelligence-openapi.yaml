@@ -1,0 +1,380 @@
+openapi: 3.1.0
+info:
+  title: GoldenFlow CRM Sales Intelligence API
+  version: 1.0.0
+  description: Read-only private-pilot access to factual CRM context for one sales opportunity at a time.
+servers:
+  - url: https://app.goldenflowcrm.com
+    description: GoldenFlow CRM production
+paths:
+  /api/agents/sales-intelligence/leads/search:
+    get:
+      operationId: searchSalesIntelligenceLeads
+      summary: Resolve a lead by name, phone, or email
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+            maxLength: 100
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10
+            default: 5
+      responses:
+        '200':
+          description: Tenant-scoped candidates with masked contact hints.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store, max-age=0
+            X-Request-Id:
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              example:
+                generated_at: '2026-09-09T09:00:00.000Z'
+                timezone: Asia/Jerusalem
+                match_count: 1
+                has_more: false
+                matches:
+                  - lead_id: 10000000-0000-4000-8000-000000000001
+                    display_name: דנה כהן
+                    status: בתהליך שיחה
+                    source: facebook_lead_ads
+                    phone_hint: '***4567'
+                    email_hint: null
+                    match_kind: exact_name
+                    updated_at: '2026-09-08T09:00:00.000Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/agents/sales-intelligence/leads/{lead_id}:
+    get:
+      operationId: getSalesIntelligenceLead
+      summary: Get factual CRM context and a bounded verified timeline for one lead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lead_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: timeline_limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 30
+      responses:
+        '200':
+          description: Lead snapshot, open tasks, provenance-aware timeline, and data-quality metadata.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store, max-age=0
+            X-Request-Id:
+              schema:
+                type: string
+                format: uuid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LeadDetailResponse'
+              example:
+                generated_at: '2026-09-09T09:00:00.000Z'
+                timezone: Asia/Jerusalem
+                lead:
+                  lead_id: 10000000-0000-4000-8000-000000000001
+                  display_name: דנה כהן
+                  status: בתהליך שיחה
+                  pipeline_stage: בתהליך שיחה
+                  source: facebook_lead_ads
+                  created_at: '2026-09-01T08:00:00.000Z'
+                  closed_at: null
+                  crm_priority: high
+                  deal_value: 7500
+                  current_note: טקסט CRM מתועד
+                  reason_not_closed: null
+                sales_state:
+                  last_verified_sales_activity_at: null
+                  legacy_last_contact_at: '2026-09-05T08:00:00.000Z'
+                  legacy_last_contact_reliability: low
+                  next_step:
+                    type: call
+                    due_at: '2026-09-10T08:00:00.000Z'
+                    source: lead_record
+                open_tasks: []
+                source_context: null
+                timeline:
+                  - occurred_at: '2026-09-01T08:00:00.000Z'
+                    event_type: lead_created
+                    direction: null
+                    summary: null
+                    outcome: null
+                    provenance: leads.created_at
+                    reliability: high
+                timeline_truncated: false
+                data_quality:
+                  timeline_reliable_from: null
+                  missing: [sales_call_outcome, objection, waiting_party]
+                  warnings:
+                    - legacy_last_contact_at is not proof of a sales interaction
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: GoldenFlow gfsi scoped token
+      description: Revocable server-side credential with the sales_intelligence:read scope.
+  responses:
+    BadRequest:
+      description: Invalid path or query parameter.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Missing, invalid, expired, or revoked credential.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Forbidden:
+      description: Missing scope or subscription access.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    NotFound:
+      description: Lead not found. The same response is used for another tenant's lead.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    RateLimited:
+      description: Too many requests.
+      headers:
+        Retry-After:
+          schema:
+            type: string
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    InternalError:
+      description: Safe internal failure without database or secret details.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+  schemas:
+    ErrorResponse:
+      type: object
+      additionalProperties: false
+      required: [error, request_id]
+      properties:
+        error:
+          type: string
+        request_id:
+          type: string
+          format: uuid
+    SearchResponse:
+      type: object
+      additionalProperties: false
+      required: [generated_at, timezone, match_count, has_more, matches]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          const: Asia/Jerusalem
+        match_count:
+          type: integer
+          minimum: 0
+        has_more:
+          type: boolean
+        matches:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/SearchMatch'
+    SearchMatch:
+      type: object
+      additionalProperties: false
+      required: [lead_id, display_name, status, source, phone_hint, email_hint, match_kind, updated_at]
+      properties:
+        lead_id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+        status:
+          type: [string, 'null']
+        source:
+          type: [string, 'null']
+        phone_hint:
+          type: [string, 'null']
+          pattern: '^\*\*\*[0-9]{4}$'
+        email_hint:
+          type: [string, 'null']
+        match_kind:
+          type: string
+          enum: [exact_email, exact_phone, exact_name, name_prefix, name_contains]
+        updated_at:
+          type: [string, 'null']
+          format: date-time
+    LeadDetailResponse:
+      type: object
+      additionalProperties: false
+      required: [generated_at, timezone, lead, sales_state, open_tasks, source_context, timeline, timeline_truncated, data_quality]
+      properties:
+        generated_at:
+          type: string
+          format: date-time
+        timezone:
+          type: string
+          const: Asia/Jerusalem
+        lead:
+          $ref: '#/components/schemas/LeadSnapshot'
+        sales_state:
+          $ref: '#/components/schemas/SalesState'
+        open_tasks:
+          type: array
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/OpenTask'
+        source_context:
+          oneOf:
+            - $ref: '#/components/schemas/SourceContext'
+            - type: 'null'
+        timeline:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TimelineEvent'
+        timeline_truncated:
+          type: boolean
+        data_quality:
+          $ref: '#/components/schemas/DataQuality'
+    LeadSnapshot:
+      type: object
+      additionalProperties: false
+      required: [lead_id, display_name, status, pipeline_stage, source, created_at, closed_at, crm_priority, deal_value, current_note, reason_not_closed]
+      properties:
+        lead_id: { type: string, format: uuid }
+        display_name: { type: string }
+        status: { type: [string, 'null'] }
+        pipeline_stage: { type: [string, 'null'] }
+        source: { type: [string, 'null'] }
+        created_at: { type: string, format: date-time }
+        closed_at: { type: [string, 'null'], format: date-time }
+        crm_priority: { type: [string, 'null'] }
+        deal_value: { type: [number, 'null'] }
+        current_note: { type: [string, 'null'], maxLength: 2000 }
+        reason_not_closed: { type: [string, 'null'], maxLength: 500 }
+    SalesState:
+      type: object
+      additionalProperties: false
+      required: [last_verified_sales_activity_at, legacy_last_contact_at, legacy_last_contact_reliability, next_step]
+      properties:
+        last_verified_sales_activity_at: { type: [string, 'null'], format: date-time }
+        legacy_last_contact_at: { type: [string, 'null'], format: date-time }
+        legacy_last_contact_reliability: { type: string, const: low }
+        next_step:
+          oneOf:
+            - $ref: '#/components/schemas/NextStep'
+            - type: 'null'
+    NextStep:
+      type: object
+      additionalProperties: false
+      required: [type, due_at, source]
+      properties:
+        type: { type: [string, 'null'] }
+        due_at: { type: [string, 'null'], format: date-time }
+        source: { type: string, const: lead_record }
+    OpenTask:
+      type: object
+      additionalProperties: false
+      required: [task_id, title, description, status, priority, due_at, is_automated, created_at]
+      properties:
+        task_id: { type: string, format: uuid }
+        title: { type: string, maxLength: 200 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        status: { type: string }
+        priority: { type: [string, 'null'] }
+        due_at: { type: [string, 'null'], format: date-time }
+        is_automated: { type: boolean }
+        created_at: { type: string, format: date-time }
+    SourceContext:
+      type: object
+      additionalProperties: false
+      required: [provider, submitted_at, received_at, campaign_name, form_name]
+      properties:
+        provider: { type: [string, 'null'] }
+        submitted_at: { type: [string, 'null'], format: date-time }
+        received_at: { type: [string, 'null'], format: date-time }
+        campaign_name: { type: [string, 'null'] }
+        form_name: { type: [string, 'null'] }
+    TimelineEvent:
+      type: object
+      additionalProperties: false
+      required: [occurred_at, event_type, direction, summary, outcome, provenance, reliability]
+      properties:
+        occurred_at: { type: string, format: date-time }
+        event_type: { type: string }
+        direction: { type: [string, 'null'], enum: [inbound, outbound, internal, null] }
+        summary: { type: [string, 'null'], maxLength: 500 }
+        outcome: { type: [string, 'null'], maxLength: 500 }
+        provenance: { type: string }
+        reliability: { type: string, const: high }
+    DataQuality:
+      type: object
+      additionalProperties: false
+      required: [timeline_reliable_from, missing, warnings]
+      properties:
+        timeline_reliable_from: { type: [string, 'null'], format: date-time }
+        missing:
+          type: array
+          items: { type: string }
+        warnings:
+          type: array
+          items: { type: string }

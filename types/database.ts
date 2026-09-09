@@ -45,6 +45,80 @@ export type Database = {
         };
         Relationships: [];
       };
+      lead_sales_activities: {
+        Row: {
+          activity_type:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at: string;
+          direction: "inbound" | "outbound" | "internal" | null;
+          id: string;
+          lead_id: string;
+          occurred_at: string;
+          outcome: string | null;
+          source: "crm_manual" | "crm_system" | "integration";
+          summary: string | null;
+          user_id: string;
+        };
+        Insert: {
+          activity_type:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at?: string;
+          direction?: "inbound" | "outbound" | "internal" | null;
+          id?: string;
+          lead_id: string;
+          occurred_at: string;
+          outcome?: string | null;
+          source: "crm_manual" | "crm_system" | "integration";
+          summary?: string | null;
+          user_id: string;
+        };
+        Update: {
+          activity_type?:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at?: string;
+          direction?: "inbound" | "outbound" | "internal" | null;
+          id?: string;
+          lead_id?: string;
+          occurred_at?: string;
+          outcome?: string | null;
+          source?: "crm_manual" | "crm_system" | "integration";
+          summary?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lead_sales_activities_owned_lead_fkey";
+            columns: ["user_id", "lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
       users: {
         Row: {
           created_at: string;

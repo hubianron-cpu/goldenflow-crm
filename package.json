@@ -9,7 +9,9 @@
     "lint": "eslint . --ignore-pattern .next --ignore-pattern .test-dist --ignore-pattern next-env.d.ts",
     "typecheck": "tsc --noEmit",
     "test:lead-followups": "tsc -p tests/tsconfig.json && node --test .test-dist/tests/lead-followups.test.js",
-    "agent:credential": "node scripts/create-lead-followups-credential.mjs"
+    "test:sales-intelligence": "tsc -p tests/tsconfig.sales-intelligence.json && node --test .test-dist/tests/sales-intelligence.test.js",
+    "agent:credential": "node scripts/create-lead-followups-credential.mjs",
+    "agent:sales-intelligence-credential": "node scripts/create-sales-intelligence-credential.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
