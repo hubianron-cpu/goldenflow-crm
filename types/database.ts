@@ -237,13 +237,54 @@ export type Database = {
           },
         ];
       };
+      crm_client_activation_outbox: {
+        Row: {
+          attempt_count: number;
+          created_at: string;
+          delivered_at: string | null;
+          delivery_status: "pending" | "delivered" | "failed" | "manual_review";
+          event_type: "deal.won";
+          id: string;
+          last_error: string | null;
+          lead_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          created_at?: string;
+          delivered_at?: string | null;
+          delivery_status?: "pending" | "delivered" | "failed" | "manual_review";
+          event_type?: "deal.won";
+          id?: string;
+          last_error?: string | null;
+          lead_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          created_at?: string;
+          delivered_at?: string | null;
+          delivery_status?: "pending" | "delivered" | "failed" | "manual_review";
+          event_type?: "deal.won";
+          id?: string;
+          last_error?: string | null;
+          lead_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       leads: {
         Row: {
           closed_at: string | null;
           created_at: string;
+          currency: string;
           deal_probability: number;
           email: string | null;
           id: string;
+          id_number: string | null;
           last_contact_date: string | null;
           full_name: string;
           next_action_date: string | null;
@@ -251,6 +292,7 @@ export type Database = {
           notes: string | null;
           phone: string | null;
           priority: string;
+          program: string | null;
           reason_not_closed: string | null;
           source: string;
           status: string;
@@ -261,9 +303,11 @@ export type Database = {
         Insert: {
           closed_at?: string | null;
           created_at?: string;
+          currency?: string;
           deal_probability?: number;
           email?: string | null;
           id?: string;
+          id_number?: string | null;
           last_contact_date?: string | null;
           full_name: string;
           next_action_date?: string | null;
@@ -271,6 +315,7 @@ export type Database = {
           notes?: string | null;
           phone?: string | null;
           priority?: string;
+          program?: string | null;
           reason_not_closed?: string | null;
           source: string;
           status?: string;
@@ -281,9 +326,11 @@ export type Database = {
         Update: {
           closed_at?: string | null;
           created_at?: string;
+          currency?: string;
           deal_probability?: number;
           email?: string | null;
           id?: string;
+          id_number?: string | null;
           last_contact_date?: string | null;
           full_name?: string;
           next_action_date?: string | null;
@@ -291,6 +338,7 @@ export type Database = {
           notes?: string | null;
           phone?: string | null;
           priority?: string;
+          program?: string | null;
           reason_not_closed?: string | null;
           source?: string;
           status?: string;

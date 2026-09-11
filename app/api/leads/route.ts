@@ -21,6 +21,8 @@ import { getSubscriptionAccess, type SubscriptionAccess } from "@/lib/subscripti
 import { getDefaultLeadOwnerId, getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createServerClient } from "@/lib/supabase/server";
 import { getPhoneDuplicateCandidates } from "@/lib/phone";
+import { isBusinessCenterWonStatus } from "@/lib/business-center/semantics";
+import { queueAndDispatchDealWon } from "@/lib/integrations/client-activation";
 
 const leadSelect =
   "id, closed_at, created_at, deal_probability, last_contact_date, name:full_name, next_action_date, next_action_type, notes, phone, priority, reason_not_closed, source, status, updated_at, user_id, value";
@@ -318,7 +320,12 @@ function normalizeLeadPayload(body: Record<string, unknown>) {
   const priority = typeof body.priority === "string" && isPriority(body.priority) ? body.priority : "medium";
 
   return {
+    currency: typeof body.currency === "string" && /^[A-Z]{3}$/.test(body.currency.trim().toUpperCase())
+      ? body.currency.trim().toUpperCase()
+      : "ILS",
     deal_probability: parseProbability(body.deal_probability),
+    email: cleanOptional(body.email)?.toLowerCase() ?? null,
+    id_number: cleanOptional(body.id_number)?.replace(/\D/g, "") ?? null,
     last_contact_date: parseDate(body.last_contact_date),
     name: typeof body.name === "string" ? body.name.trim() : "",
     next_action_date: parseDate(body.next_action_date),
@@ -326,6 +333,7 @@ function normalizeLeadPayload(body: Record<string, unknown>) {
     notes: cleanOptional(body.notes),
     phone: cleanOptional(body.phone),
     priority,
+    program: cleanOptional(body.program),
     reason_not_closed: cleanOptional(body.reason_not_closed),
     source: cleanOptional(body.source) ?? "organic",
     status,
@@ -632,6 +640,18 @@ export async function POST(request: Request) {
     return context.source === "public" ? jsonError(PUBLIC_LEAD_ERROR, 400) : jsonError("Phone number is invalid.", 400);
   }
 
+  if (context.source === "session" && lead.email && !isValidEmail(lead.email)) {
+    return jsonError("Email address is invalid.", 400);
+  }
+
+  if (context.source === "session" && lead.id_number && !/^\d{5,20}$/.test(lead.id_number)) {
+    return jsonError("ID number is invalid.", 400);
+  }
+
+  if (context.source === "session" && isTooLong(lead.program, 200)) {
+    return jsonError("Program is invalid.", 400);
+  }
+
   const now = new Date().toISOString();
   const ownerId = context.userId;
   const phone = lead.phone;
@@ -657,6 +677,12 @@ export async function POST(request: Request) {
     const { data, error } = await writeSupabase
       .from("leads")
       .update({
+        ...(context.source === "session" ? {
+          currency: lead.currency,
+          ...(lead.email ? { email: lead.email } : {}),
+          ...(lead.id_number ? { id_number: lead.id_number } : {}),
+          ...(lead.program ? { program: lead.program } : {}),
+        } : {}),
         last_contact_date: now,
         next_action_date: now,
         next_action_type: "call",
@@ -709,6 +735,12 @@ export async function POST(request: Request) {
   const { data, error } = await writeSupabase
     .from("leads")
     .insert({
+      ...(context.source === "session" ? {
+        currency: lead.currency,
+        email: lead.email,
+        id_number: lead.id_number,
+        program: lead.program,
+      } : {}),
       deal_probability: lead.deal_probability,
       last_contact_date: now,
       full_name: leadName,
@@ -773,6 +805,30 @@ export async function PATCH(request: Request) {
     }
 
     update.status = normalizeLeadStatus(record.status);
+  }
+
+  if ("email" in record) {
+    const email = cleanOptional(record.email)?.toLowerCase() ?? null;
+    if (email && !isValidEmail(email)) return jsonError("Email address is invalid.", 400);
+    update.email = email;
+  }
+
+  if ("id_number" in record) {
+    const idNumber = cleanOptional(record.id_number)?.replace(/\D/g, "") ?? null;
+    if (idNumber && !/^\d{5,20}$/.test(idNumber)) return jsonError("ID number is invalid.", 400);
+    update.id_number = idNumber;
+  }
+
+  if ("program" in record) {
+    const program = cleanOptional(record.program);
+    if (isTooLong(program, 200)) return jsonError("Program is invalid.", 400);
+    update.program = program;
+  }
+
+  if ("currency" in record) {
+    const currency = typeof record.currency === "string" ? record.currency.trim().toUpperCase() : "";
+    if (!/^[A-Z]{3}$/.test(currency)) return jsonError("Currency is invalid.", 400);
+    update.currency = currency;
   }
 
   if ("name" in record) {
@@ -908,12 +964,16 @@ export async function PATCH(request: Request) {
     ? await completeAutomatedLeadTasks(writeClient, data.id, context.user.id)
     : undefined;
   const automationError = await runTaskAutomations(writeClient, data as Lead, context.user.id);
+  const clientActivationDispatch = isBusinessCenterWonStatus((data as Lead).status)
+    ? await queueAndDispatchDealWon(data.id, context.user.id)
+    : null;
 
   return NextResponse.json(
     {
       lead: data,
       taskAutomationError: automationError?.error ?? null,
       taskSyncError: taskSyncError?.error ?? null,
+      clientActivationDispatch,
     },
     { status: 200 },
   );

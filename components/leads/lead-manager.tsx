@@ -29,9 +29,12 @@ import { buildWhatsAppUrl, getWhatsAppMessage, WHATSAPP_MESSAGE_OPTIONS, type Wh
 type SortKey = "score_desc" | "inactivity_desc" | "value_desc" | "urgency" | "created_desc" | "created_asc" | "name_asc";
 
 const initialForm = {
+  email: "",
+  idNumber: "",
   name: "",
   phone: "",
   priority: "medium",
+  program: "",
   source: "",
   value: "",
 };
@@ -410,9 +413,13 @@ export function LeadManager() {
     startTransition(async () => {
       const response = await fetch("/api/leads", {
         body: JSON.stringify({
+          currency: "ILS",
+          email: form.email.trim(),
+          id_number: form.idNumber.trim(),
           name: form.name.trim(),
           phone: form.phone.trim(),
           priority: form.priority,
+          program: form.program.trim(),
           source: form.source.trim(),
           status: "לידים חדשים",
           value: form.value,
@@ -604,7 +611,7 @@ export function LeadManager() {
       ) : null}
 
       <section className="panel p-4 sm:p-5">
-        <form onSubmit={handleCreateLead} className="grid gap-3 lg:grid-cols-[1.2fr_1fr_0.8fr_1fr_0.8fr_auto]">
+        <form onSubmit={handleCreateLead} className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
           <input
             className="field"
             onChange={(event) => updateField("name", event.target.value)}
@@ -619,6 +626,28 @@ export function LeadManager() {
             placeholder="טלפון"
             required
             value={form.phone}
+          />
+          <input
+            className="field"
+            inputMode="email"
+            onChange={(event) => updateField("email", event.target.value)}
+            placeholder="אימייל לאקטיבציה"
+            type="email"
+            value={form.email}
+          />
+          <input
+            autoComplete="off"
+            className="field"
+            inputMode="numeric"
+            onChange={(event) => updateField("idNumber", event.target.value)}
+            placeholder="מספר זהות לאקטיבציה"
+            value={form.idNumber}
+          />
+          <input
+            className="field"
+            onChange={(event) => updateField("program", event.target.value)}
+            placeholder="תוכנית / מוצר"
+            value={form.program}
           />
           <input
             className="field"
@@ -642,7 +671,7 @@ export function LeadManager() {
               </option>
             ))}
           </select>
-          <button className="button-primary gap-2 whitespace-nowrap" disabled={isPending} type="submit">
+          <button className="button-primary gap-2 whitespace-nowrap xl:col-span-4" disabled={isPending} type="submit">
             <Plus className="h-4 w-4" />
             הוספה
           </button>
