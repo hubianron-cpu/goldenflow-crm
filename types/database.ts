@@ -45,6 +45,80 @@ export type Database = {
         };
         Relationships: [];
       };
+      lead_sales_activities: {
+        Row: {
+          activity_type:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at: string;
+          direction: "inbound" | "outbound" | "internal" | null;
+          id: string;
+          lead_id: string;
+          occurred_at: string;
+          outcome: string | null;
+          source: "crm_manual" | "crm_system" | "integration";
+          summary: string | null;
+          user_id: string;
+        };
+        Insert: {
+          activity_type:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at?: string;
+          direction?: "inbound" | "outbound" | "internal" | null;
+          id?: string;
+          lead_id: string;
+          occurred_at: string;
+          outcome?: string | null;
+          source: "crm_manual" | "crm_system" | "integration";
+          summary?: string | null;
+          user_id: string;
+        };
+        Update: {
+          activity_type?:
+            | "contact_attempt"
+            | "call_completed"
+            | "meeting_completed"
+            | "message_sent"
+            | "message_received"
+            | "offer_sent"
+            | "objection_recorded"
+            | "follow_up_completed"
+            | "note_recorded";
+          created_at?: string;
+          direction?: "inbound" | "outbound" | "internal" | null;
+          id?: string;
+          lead_id?: string;
+          occurred_at?: string;
+          outcome?: string | null;
+          source?: "crm_manual" | "crm_system" | "integration";
+          summary?: string | null;
+          user_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "lead_sales_activities_owned_lead_fkey";
+            columns: ["user_id", "lead_id"];
+            isOneToOne: false;
+            referencedRelation: "leads";
+            referencedColumns: ["user_id", "id"];
+          },
+        ];
+      };
       users: {
         Row: {
           created_at: string;
@@ -163,13 +237,54 @@ export type Database = {
           },
         ];
       };
+      crm_client_activation_outbox: {
+        Row: {
+          attempt_count: number;
+          created_at: string;
+          delivered_at: string | null;
+          delivery_status: "pending" | "delivered" | "failed" | "manual_review";
+          event_type: "deal.won";
+          id: string;
+          last_error: string | null;
+          lead_id: string;
+          updated_at: string;
+          user_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          created_at?: string;
+          delivered_at?: string | null;
+          delivery_status?: "pending" | "delivered" | "failed" | "manual_review";
+          event_type?: "deal.won";
+          id?: string;
+          last_error?: string | null;
+          lead_id: string;
+          updated_at?: string;
+          user_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          created_at?: string;
+          delivered_at?: string | null;
+          delivery_status?: "pending" | "delivered" | "failed" | "manual_review";
+          event_type?: "deal.won";
+          id?: string;
+          last_error?: string | null;
+          lead_id?: string;
+          updated_at?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       leads: {
         Row: {
           closed_at: string | null;
           created_at: string;
+          currency: string;
           deal_probability: number;
           email: string | null;
           id: string;
+          id_number: string | null;
           last_contact_date: string | null;
           full_name: string;
           next_action_date: string | null;
@@ -177,6 +292,7 @@ export type Database = {
           notes: string | null;
           phone: string | null;
           priority: string;
+          program: string | null;
           reason_not_closed: string | null;
           source: string;
           status: string;
@@ -187,9 +303,11 @@ export type Database = {
         Insert: {
           closed_at?: string | null;
           created_at?: string;
+          currency?: string;
           deal_probability?: number;
           email?: string | null;
           id?: string;
+          id_number?: string | null;
           last_contact_date?: string | null;
           full_name: string;
           next_action_date?: string | null;
@@ -197,6 +315,7 @@ export type Database = {
           notes?: string | null;
           phone?: string | null;
           priority?: string;
+          program?: string | null;
           reason_not_closed?: string | null;
           source: string;
           status?: string;
@@ -207,9 +326,11 @@ export type Database = {
         Update: {
           closed_at?: string | null;
           created_at?: string;
+          currency?: string;
           deal_probability?: number;
           email?: string | null;
           id?: string;
+          id_number?: string | null;
           last_contact_date?: string | null;
           full_name?: string;
           next_action_date?: string | null;
@@ -217,6 +338,7 @@ export type Database = {
           notes?: string | null;
           phone?: string | null;
           priority?: string;
+          program?: string | null;
           reason_not_closed?: string | null;
           source?: string;
           status?: string;
