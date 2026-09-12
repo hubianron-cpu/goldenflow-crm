@@ -5,11 +5,12 @@ import { isBusinessCenterWonStatus } from "@/lib/business-center/semantics";
 const MAX_OUTBOX_ATTEMPTS = 5;
 
 function config() {
+  const enabled = process.env.CLIENT_ACTIVATION_ENABLED?.trim().toLowerCase() === "true";
   const serviceUrl = process.env.CLIENT_ACTIVATION_SERVICE_URL?.trim();
   const webhookSecret = process.env.CLIENT_ACTIVATION_WEBHOOK_SECRET?.trim();
   const authorizedBusinessId = process.env.CLIENT_ACTIVATION_BUSINESS_ID?.trim();
   const protectionBypass = process.env.CLIENT_ACTIVATION_PROTECTION_BYPASS?.trim();
-  if (!serviceUrl || !webhookSecret || !authorizedBusinessId) return null;
+  if (!enabled || !serviceUrl || !webhookSecret || !authorizedBusinessId) return null;
   return { serviceUrl, webhookSecret, authorizedBusinessId, protectionBypass };
 }
 
