@@ -1,17 +1,19 @@
 import { createHmac } from "node:crypto";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isBusinessCenterWonStatus } from "@/lib/business-center/semantics";
+import { isClientActivationLeadAllowed } from "@/lib/integrations/client-activation-gate";
 
 const MAX_OUTBOX_ATTEMPTS = 5;
 
 function config() {
   const enabled = process.env.CLIENT_ACTIVATION_ENABLED?.trim().toLowerCase() === "true";
+  const qaLeadId = process.env.CLIENT_ACTIVATION_QA_LEAD_ID?.trim() || null;
   const serviceUrl = process.env.CLIENT_ACTIVATION_SERVICE_URL?.trim();
   const webhookSecret = process.env.CLIENT_ACTIVATION_WEBHOOK_SECRET?.trim();
   const authorizedBusinessId = process.env.CLIENT_ACTIVATION_BUSINESS_ID?.trim();
   const protectionBypass = process.env.CLIENT_ACTIVATION_PROTECTION_BYPASS?.trim();
-  if (!enabled || !serviceUrl || !webhookSecret || !authorizedBusinessId) return null;
-  return { serviceUrl, webhookSecret, authorizedBusinessId, protectionBypass };
+  if (!serviceUrl || !webhookSecret || !authorizedBusinessId) return null;
+  return { enabled, qaLeadId, serviceUrl, webhookSecret, authorizedBusinessId, protectionBypass };
 }
 
 function clean(value: unknown) {
@@ -22,6 +24,9 @@ function clean(value: unknown) {
 export async function queueAndDispatchDealWon(leadId: string, userId: string) {
   const settings = config();
   if (!settings) return { status: "not_configured" as const };
+  if (!isClientActivationLeadAllowed(settings.enabled, settings.qaLeadId, leadId)) {
+    return { status: "not_configured" as const };
+  }
   if (userId !== settings.authorizedBusinessId) return { status: "ignored" as const };
   const admin = getSupabaseAdminClient();
   if (!admin) return { status: "not_configured" as const };
@@ -124,13 +129,18 @@ export async function reconcileAndDispatchDealWon() {
   const settings = config();
   const admin = getSupabaseAdminClient();
   if (!settings || !admin) return { processed: 0, status: "not_configured" as const };
-  const { data, error } = await admin
+  if (!settings.enabled && !settings.qaLeadId) {
+    return { processed: 0, status: "not_configured" as const };
+  }
+  let query = admin
     .from("leads")
     .select("id,user_id,status")
     .eq("user_id", settings.authorizedBusinessId)
-    .in("status", ["נסגר בהצלחה", "נסגר", "won"])
-    .order("updated_at", { ascending: true })
-    .limit(20);
+    .in("status", ["נסגר בהצלחה", "נסגר", "won"]);
+  query = settings.enabled
+    ? query.order("updated_at", { ascending: true }).limit(20)
+    : query.eq("id", settings.qaLeadId as string).limit(1);
+  const { data, error } = await query;
   if (error) return { processed: 0, status: "failed" as const };
   const results = [];
   for (const lead of data || []) results.push(await queueAndDispatchDealWon(lead.id, lead.user_id));
