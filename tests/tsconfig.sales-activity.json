@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.sales-intelligence.json",
+  "include": ["sales-activity.test.ts", "../lib/sales-activity.ts", "../lib/leads.ts"]
+}

@@ -5,10 +5,10 @@ import { useRouter } from "next/navigation";
 import { CalendarClock, MessageSquareText, Plus, Search } from "lucide-react";
 import { LeadContentAttribution } from "@/components/business-center/lead-content-attribution";
 import { LoadingCard } from "@/components/loading-card";
+import { SalesActivityDialog } from "@/components/leads/sales-activity-dialog";
 import { StatusMessage } from "@/components/status-message";
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import {
-  getActionCompletedStatus,
   getLeadStatusColor,
   getLeadTemperature,
   getDaysSinceLastActivity,
@@ -128,19 +128,13 @@ function isOverdue(value: string | null) {
   return Boolean(value && new Date(value).getTime() < Date.now());
 }
 
-function getTomorrowIso() {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  tomorrow.setHours(9, 0, 0, 0);
-  return tomorrow.toISOString();
-}
-
 function getUrgencyTime(lead: Lead) {
   return lead.next_action_date ? new Date(lead.next_action_date).getTime() : Number.MAX_SAFE_INTEGER;
 }
 
 export function LeadManager() {
   const router = useRouter();
+  const [activityLead, setActivityLead] = useState<Lead | null>(null);
   const [error, setError] = useState("");
   const [upgradeUrl, setUpgradeUrl] = useState("");
   const [success, setSuccess] = useState("");
@@ -460,24 +454,7 @@ export function LeadManager() {
   }
 
   function completeAction(lead: Lead) {
-    if (!isAutomaticSalesActionEligible(lead)) {
-      return;
-    }
-
-    const nextStatus = getActionCompletedStatus(lead.status);
-    const now = new Date().toISOString();
-
-    patchLead(
-      {
-        id: lead.id,
-        last_contact_date: now,
-        next_action_date: getTomorrowIso(),
-        next_action_type: "follow-up",
-        status: nextStatus ?? lead.status,
-        updated_at: now,
-      },
-      "✔ הליד עודכן והועבר קדימה",
-    );
+    setActivityLead(lead);
   }
 
   function handleNote(event: FormEvent<HTMLFormElement>, leadId: string) {
@@ -598,6 +575,12 @@ export function LeadManager() {
 
   return (
     <div className="space-y-6">
+      {activityLead && <SalesActivityDialog key={activityLead.id} lead={activityLead} onClose={() => setActivityLead(null)} onSaved={() => {
+        setActivityLead(null);
+        setSuccess("סיכום הטיפול נשמר.");
+        void loadLeads();
+        router.refresh();
+      }} />}
       <StatusMessage error={error} success={success} />
       {loadFailed ? (
         <button className="button-secondary w-full sm:w-auto" onClick={retryLeadLoad} type="button">
@@ -1009,6 +992,7 @@ export function LeadManager() {
                             עריכה ופעולות נוספות
                           </summary>
                           <div className="mt-2 rounded-xl border border-white/10 bg-black/20 p-2">
+                            <button className="button-secondary mb-3 w-full" type="button" onClick={() => completeAction(lead)}>תיעוד והיסטוריית טיפול</button>
                             <form className="space-y-2" onSubmit={(event) => handleSalesDetails(event, lead.id)}>
                               <input className="field py-2" defaultValue={lead.name} name="name" placeholder="שם" />
                               <input className="field py-2" defaultValue={lead.phone ?? ""} name="phone" placeholder="טלפון" />
@@ -1159,6 +1143,7 @@ export function LeadManager() {
                         </form>
                       ) : null}
 
+                      <button className="button-secondary w-full" type="button" onClick={() => completeAction(lead)}>תיעוד והיסטוריית טיפול</button>
                       <form onSubmit={(event) => handleNote(event, lead.id)}>
                         <textarea className="field min-h-20 resize-none" defaultValue={lead.notes ?? ""} name="notes" placeholder="סיכום שיחה..." />
                         <button className="button-secondary mt-2 w-full py-2" disabled={isPending} type="submit">

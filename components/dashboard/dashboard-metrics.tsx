@@ -12,11 +12,11 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { LoadingCard } from "@/components/loading-card";
+import { SalesActivityDialog } from "@/components/leads/sales-activity-dialog";
 import { StatusMessage } from "@/components/status-message";
 import { useDialogAccessibility } from "@/components/use-dialog-accessibility";
 import { scheduleLeadCall } from "@/lib/actions";
 import {
-  getActionCompletedStatus,
   getDaysSinceLastActivity,
   getLeadScore,
   getLeadStatusColor,
@@ -297,6 +297,7 @@ function getLocalDateValue(date = new Date()) {
 
 export function DashboardMetrics() {
   const router = useRouter();
+  const [activityLead, setActivityLead] = useState<Lead | null>(null);
   const [error, setError] = useState("");
   const [actionImpact, setActionImpact] = useState("");
   const [focusedLeadId, setFocusedLeadId] = useState<string | null>(null);
@@ -784,7 +785,7 @@ export function DashboardMetrics() {
     }
   }
 
-  async function updateLeadAction(leadId: string, mode: "done" | "tomorrow") {
+  async function updateLeadAction(leadId: string) {
     markUserAction();
     setError("");
     setActionImpact("");
@@ -808,19 +809,10 @@ export function DashboardMetrics() {
 
     setUpdatingLeadId(lead.id);
     const now = new Date().toISOString();
-    const nextStatus = mode === "done" ? getActionCompletedStatus(lead.status) : null;
-    const nextAction =
-      mode === "done"
-        ? {
-            ...(nextStatus ? { status: nextStatus } : {}),
-            next_action_date: getTomorrowIso(),
-            next_action_type: "follow-up",
-          }
-        : { next_action_date: getTomorrowIso(), next_action_type: "follow-up" };
+    const nextAction = { next_action_date: getTomorrowIso(), next_action_type: "follow-up" };
     const response = await fetch("/api/leads", {
       body: JSON.stringify({
         id: lead.id,
-        ...(mode === "done" ? { last_contact_date: now } : {}),
         ...nextAction,
         updated_at: now,
       }),
@@ -840,11 +832,8 @@ export function DashboardMetrics() {
     }
     setHandledLeadIds((current) => [...new Set([...current, lead.id])]);
     setHandledToday((current) => current + 1);
-    if (mode === "done") {
-      setCompletedInteractions((current) => current + 1);
-    }
-    setActionImpact(mode === "done" ? `+${formatMoney(lead.value || 0)} פוטנציאל קודם` : "הפעולה נשמרה למחר");
-    setSuccess(mode === "done" ? "✔ הליד עודכן והועבר קדימה" : "⏩ הליד נדחה למחר");
+    setActionImpact("הפעולה נשמרה למחר");
+    setSuccess("⏩ הליד נדחה למחר");
     if (focusedLeadId === lead.id) {
       setFocusedLeadId(null);
     }
@@ -853,11 +842,13 @@ export function DashboardMetrics() {
   }
 
   async function handleLeadHandled(leadId: string) {
-    await updateLeadAction(leadId, "done");
+    markUserAction();
+    const lead = leads.find((item) => item.id === leadId);
+    if (lead) setActivityLead(lead);
   }
 
   async function handlePostponeToTomorrow(leadId: string) {
-    await updateLeadAction(leadId, "tomorrow");
+    await updateLeadAction(leadId);
   }
 
   function openScheduleCall(lead: Lead) {
@@ -958,6 +949,18 @@ export function DashboardMetrics() {
 
   return (
     <div className="w-full max-w-full space-y-6 overflow-x-clip">
+      {activityLead && <SalesActivityDialog key={activityLead.id} lead={activityLead} onClose={() => setActivityLead(null)} onSaved={() => {
+        rememberDailyFlowLead(activityLead.id);
+        setHandledLeadIds((current) => [...new Set([...current, activityLead.id])]);
+        setHandledToday((current) => current + 1);
+        setCompletedInteractions((current) => current + 1);
+        setFocusedLeadId(null);
+        setActivityLead(null);
+        setActionImpact("");
+        setSuccess("סיכום הטיפול נשמר.");
+        void loadLeads();
+        router.refresh();
+      }} />}
       <StatusMessage error={error} success={success} />
       {leadsLoadFailed || targetLoadFailed ? (
         <button className="button-secondary w-full sm:w-auto" onClick={retryDashboardLoad} type="button">
@@ -1295,7 +1298,6 @@ export function DashboardMetrics() {
                   className="button-secondary min-h-12"
                   disabled={updatingLeadId === dailyFlowLead.id}
                   onClick={() => {
-                    rememberDailyFlowLead(dailyFlowLead.id);
                     void handleLeadHandled(dailyFlowLead.id);
                   }}
                   type="button"
@@ -1420,7 +1422,7 @@ export function DashboardMetrics() {
                   💬 שלח הודעה
                 </a>
               ) : null}
-              <button className="button-secondary min-h-12" disabled={updatingLeadId === nextActionLead.id} onClick={() => handleLeadHandled(nextActionLead.id)} title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא" type="button">
+              <button className="button-secondary min-h-12" disabled={updatingLeadId === nextActionLead.id} onClick={() => handleLeadHandled(nextActionLead.id)} title="תיעוד הטיפול והצעד הבא" type="button">
                 ✔ טיפלתי
               </button>
               <button className="button-secondary min-h-12" disabled={updatingLeadId === nextActionLead.id} onClick={() => handlePostponeToTomorrow(nextActionLead.id)} title="הליד יחזור לטיפול מחר" type="button">
@@ -1613,7 +1615,7 @@ export function DashboardMetrics() {
                           >
                             💬
                           </a>
-                          <button className="button-secondary min-h-9 min-w-[72px] flex-1 px-2 py-1.5 text-xs active:scale-[0.97]" disabled={updatingLeadId === lead.id} onClick={() => handleLeadHandled(lead.id)} title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא" type="button">
+                          <button className="button-secondary min-h-9 min-w-[72px] flex-1 px-2 py-1.5 text-xs active:scale-[0.97]" disabled={updatingLeadId === lead.id} onClick={() => handleLeadHandled(lead.id)} title="תיעוד הטיפול והצעד הבא" type="button">
                             ✔ טיפלתי
                           </button>
                           <button
