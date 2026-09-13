@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { GripVertical, MessageCircle, PhoneCall } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { LoadingCard } from "@/components/loading-card";
+import { SalesActivityDialog } from "@/components/leads/sales-activity-dialog";
 import { StatusMessage } from "@/components/status-message";
 import {
-  getActionCompletedStatus,
   getLeadStatusColor,
   isFinalLeadStatus,
   normalizeLeadStatus,
@@ -85,6 +85,7 @@ function getPipelineStage(status: string): LeadStatus | null {
 
 export function PipelineBoard() {
   const router = useRouter();
+  const [activityLead, setActivityLead] = useState<Lead | null>(null);
   const [draggedLeadId, setDraggedLeadId] = useState<string | null>(null);
   const [dragOverStatus, setDragOverStatus] = useState<string | null>(null);
   const [expandedLeadId, setExpandedLeadId] = useState<string | null>(null);
@@ -230,20 +231,7 @@ export function PipelineBoard() {
   }
 
   function handleLeadHandled(lead: Lead) {
-    const nextStatus = getActionCompletedStatus(lead.status);
-    const now = new Date().toISOString();
-
-    patchLead(
-      lead.id,
-      {
-        last_contact_date: now,
-        next_action_date: getTomorrowIso(),
-        next_action_type: "follow-up",
-        ...(nextStatus ? { status: nextStatus } : {}),
-        updated_at: now,
-      },
-      "✔ הליד עודכן והועבר קדימה",
-    );
+    setActivityLead(lead);
   }
 
   function handlePostponeToTomorrow(lead: Lead) {
@@ -300,6 +288,12 @@ export function PipelineBoard() {
 
   return (
     <div className="space-y-6">
+      {activityLead && <SalesActivityDialog key={activityLead.id} lead={activityLead} onClose={() => setActivityLead(null)} onSaved={() => {
+        setActivityLead(null);
+        setSuccess("סיכום הטיפול נשמר.");
+        void loadLeads();
+        router.refresh();
+      }} />}
       <StatusMessage error={error} success={success} />
       {loadFailed ? (
         <button className="button-secondary w-full sm:w-auto" onClick={retryLeadLoad} type="button">
@@ -464,7 +458,7 @@ export function PipelineBoard() {
                                 event.stopPropagation();
                                 handleLeadHandled(lead);
                               }}
-                              title="סימנתי שטיפלתי בליד והתקדמתי לשלב הבא"
+                              title="תיעוד הטיפול והצעד הבא"
                               type="button"
                             >
                               ✔ טיפלתי
