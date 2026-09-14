@@ -614,7 +614,7 @@ export function LeadManager() {
             className="field"
             inputMode="email"
             onChange={(event) => updateField("email", event.target.value)}
-            placeholder="אימייל לאקטיבציה"
+            placeholder="אימייל"
             type="email"
             value={form.email}
           />
@@ -623,7 +623,7 @@ export function LeadManager() {
             className="field"
             inputMode="numeric"
             onChange={(event) => updateField("idNumber", event.target.value)}
-            placeholder="מספר זהות לאקטיבציה"
+            placeholder="מספר זהות"
             value={form.idNumber}
           />
           <input
