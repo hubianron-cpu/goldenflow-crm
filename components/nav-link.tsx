@@ -3,7 +3,7 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart3, BriefcaseBusiness, KanbanSquare, LayoutDashboard, ListTodo, Users, type LucideIcon } from "lucide-react";
+import { BarChart3, BriefcaseBusiness, KanbanSquare, LayoutDashboard, ListTodo, Users, Wallet, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -12,6 +12,7 @@ const navigation = [
   { href: "/tasks", label: "המשימות שלי", icon: ListTodo },
   { href: "/pipeline", label: "מסלול המכירה", icon: KanbanSquare },
   { href: "/roi-center", label: "מרכז ROI", icon: BarChart3 },
+  { href: "/expenses", label: "ניהול הוצאות", icon: Wallet },
   { href: "/business-center", label: "מרכז העסק", icon: BriefcaseBusiness },
 ] satisfies Array<{ href: Route; label: string; icon: LucideIcon }>;
 
