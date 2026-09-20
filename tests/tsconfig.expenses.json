@@ -1,4 +1,0 @@
-{
-  "extends": "./tsconfig.sales-intelligence.json",
-  "include": ["expenses.test.ts", "../lib/expenses/model.ts", "../lib/calendar/crypto.ts"]
-}
