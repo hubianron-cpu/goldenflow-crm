@@ -112,5 +112,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/leads/:path*", "/tasks/:path*", "/pipeline/:path*", "/roi-center", "/roi-center/:path*", "/business-center", "/business-center/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/leads/:path*", "/tasks/:path*", "/pipeline/:path*", "/expenses/:path*", "/roi-center", "/roi-center/:path*", "/business-center", "/business-center/:path*", "/admin/:path*"],
 };

@@ -14,9 +14,19 @@ export async function createServerClient() {
       setAll(
         cookiesToSet: Array<{ name: string; value: string; options?: Record<string, unknown> }>,
       ) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options as never);
-        });
+        try {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            cookieStore.set(name, value, options as never);
+          });
+        } catch (error) {
+          // Server Components are read-only; middleware persists refreshed cookies.
+          if (
+            !(error instanceof Error) ||
+            !error.message.startsWith("Cookies can only be modified in a Server Action or Route Handler.")
+          ) {
+            throw error;
+          }
+        }
       },
     },
   });
