@@ -11,6 +11,7 @@
     "test:lead-followups": "tsc -p tests/tsconfig.json && node --test .test-dist/tests/lead-followups.test.js",
     "test:sales-intelligence": "tsc -p tests/tsconfig.sales-intelligence.json && node --test .test-dist/tests/sales-intelligence.test.js",
     "test:client-activation": "tsc -p tests/tsconfig.client-activation.json && node --test .test-dist/tests/client-activation-gate.test.js",
+    "test:grow-audit": "tsc -p tests/tsconfig.grow-audit.json && node --test .test-dist/tests/grow-audit.test.js",
     "agent:credential": "node scripts/create-lead-followups-credential.mjs",
     "agent:sales-intelligence-credential": "node scripts/create-sales-intelligence-credential.mjs"
   },

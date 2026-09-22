@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
+import { growAuditPayload } from "@/lib/grow/audit";
 
 export const runtime = "nodejs";
 
@@ -25,19 +26,14 @@ function jsonResponse(body: Record<string, unknown>, status = 200) {
 function logSupabaseError(label: string, error: SupabaseErrorLike) {
   console.error(label, {
     code: error.code,
-    details: error.details,
-    hint: error.hint,
-    message: error.message,
   });
 }
 
 function logGrowEventError(label: string, error: SupabaseErrorLike, context: Record<string, unknown>) {
   console.error(label, {
-    ...context,
+    table: context.table,
+    eventType: context.eventType,
     code: error.code,
-    details: error.details,
-    hint: error.hint,
-    message: error.message,
     schema: "public",
   });
 }
@@ -188,10 +184,6 @@ function getField(payload: WebhookPayload, keys: string[]) {
   return cleanText(findNestedValue(payload, keys));
 }
 
-function getJsonPayloadForStorage(payload: WebhookPayload): Json {
-  return JSON.parse(JSON.stringify(payload)) as Json;
-}
-
 async function parseWebhookPayload(request: Request): Promise<WebhookPayload | null> {
   const contentType = request.headers.get("content-type")?.toLowerCase() || "";
 
@@ -294,20 +286,20 @@ async function getUserByEmail(serviceSupabase: AdminClient, email: string): Prom
     return null;
   }
 
-  console.info("GROW_USER_LOOKUP_BY_AUTH_EMAIL", { payerEmail: email });
+  console.info("GROW_USER_LOOKUP_BY_AUTH_EMAIL");
 
   for (let page = 1; page <= 10; page += 1) {
     const { data, error } = await serviceSupabase.auth.admin.listUsers({ page, perPage: 1000 });
 
     if (error) {
-      console.error("GROW_WEBHOOK_USER_EMAIL_LOOKUP_FAILED", { message: error.message, page });
+      console.error("GROW_WEBHOOK_USER_EMAIL_LOOKUP_FAILED", { page });
       throw new Error("GROW_USER_EMAIL_LOOKUP_FAILED");
     }
 
     const user = data.users.find((candidate) => candidate.email?.toLowerCase() === email);
 
     if (user) {
-      console.info("GROW_USER_FOUND", { userId: user.id });
+      console.info("GROW_USER_FOUND");
       return user;
     }
 
@@ -376,7 +368,7 @@ async function hasProcessedTransaction(serviceSupabase: AdminClient, transaction
     return false;
   }
 
-  console.info("GROW_EVENT_LOOKUP_STARTED", { transactionCode });
+  console.info("GROW_EVENT_LOOKUP_STARTED");
 
   const { data, error } = await serviceSupabase
     .from("grow_webhook_events")
@@ -393,24 +385,24 @@ async function hasProcessedTransaction(serviceSupabase: AdminClient, transaction
   }
 
   if (!data) {
-    console.info("GROW_EVENT_LOOKUP_NO_EXISTING_EVENT", { transactionCode });
+    console.info("GROW_EVENT_LOOKUP_NO_EXISTING_EVENT");
     return false;
   }
 
-  console.info("GROW_EVENT_DUPLICATE_IGNORED", { transactionCode });
+  console.info("GROW_EVENT_DUPLICATE_IGNORED");
   return true;
 }
 
 async function saveWebhookEvent(
   serviceSupabase: AdminClient,
-  payload: WebhookPayload,
+  auditPayload: Json,
   eventType: EventType,
   transactionCode: string,
   userId: string | null,
 ) {
   const { error } = await serviceSupabase.from("grow_webhook_events").insert({
     event_type: eventType,
-    payload: getJsonPayloadForStorage(payload),
+    payload: auditPayload,
     processed_at: new Date().toISOString(),
     created_at: new Date().toISOString(),
     transaction_code: transactionCode || null,
@@ -419,7 +411,7 @@ async function saveWebhookEvent(
 
   if (error) {
     if (error.code === "23505") {
-      console.info("GROW_EVENT_DUPLICATE_IGNORED", { eventType, transactionCode });
+      console.info("GROW_EVENT_DUPLICATE_IGNORED", { eventType });
       return;
     }
 
@@ -431,7 +423,7 @@ async function saveWebhookEvent(
     throw new Error("GROW_EVENT_INSERT_FAILED");
   }
 
-  console.info("GROW_EVENT_INSERTED", { eventType, transactionCode });
+  console.info("GROW_EVENT_INSERTED", { eventType });
 }
 
 async function activateSubscription(
@@ -440,7 +432,7 @@ async function activateSubscription(
   details: ReturnType<typeof getWebhookDetails>,
 ) {
   const nowIso = new Date().toISOString();
-  console.info("GROW_SUBSCRIPTION_LOOKUP_STARTED", { transactionCode: details.transactionCode, userId });
+  console.info("GROW_SUBSCRIPTION_LOOKUP_STARTED");
 
   const { data: existingSubscription, error: existingError } = await serviceSupabase
     .from("user_subscriptions")
@@ -454,7 +446,7 @@ async function activateSubscription(
   }
 
   if (!existingSubscription) {
-    console.info("GROW_SUBSCRIPTION_NOT_FOUND", { transactionCode: details.transactionCode, userId });
+    console.info("GROW_SUBSCRIPTION_NOT_FOUND");
     return { activated: false, reason: "missing_subscription" as const };
   }
 
@@ -470,7 +462,7 @@ async function activateSubscription(
     user_id: userId,
   };
 
-  console.info("GROW_SUBSCRIPTION_UPDATE_STARTED", { transactionCode: details.transactionCode, userId });
+  console.info("GROW_SUBSCRIPTION_UPDATE_STARTED");
   const result = await serviceSupabase.from("user_subscriptions").update(payload).eq("user_id", userId);
 
   if (result.error) {
@@ -478,7 +470,7 @@ async function activateSubscription(
     throw new Error("GROW_SUBSCRIPTION_ACTIVATION_FAILED");
   }
 
-  console.info("GROW_SUBSCRIPTION_UPDATED", { transactionCode: details.transactionCode, userId });
+  console.info("GROW_SUBSCRIPTION_UPDATED");
   return { activated: true, reason: "updated" as const };
 }
 
@@ -547,47 +539,48 @@ export async function POST(request: Request) {
 
   const serviceSupabase = adminClientResult.client;
   const details = getWebhookDetails(payload);
+  const auditPayload = growAuditPayload(details);
 
   try {
     if (details.transactionCode && await hasProcessedTransaction(serviceSupabase, details.transactionCode)) {
       return jsonResponse({ ok: true, duplicate: true });
     }
 
-    console.info("GROW_USER_LOOKUP_STARTED", { payerEmail: details.payerEmail, transactionCode: details.transactionCode });
+    console.info("GROW_USER_LOOKUP_STARTED");
     const user = await findMatchingUser(serviceSupabase, payload, details);
 
     if (!user) {
-      console.info("GROW_USER_NOT_FOUND", { payerEmail: details.payerEmail, transactionCode: details.transactionCode });
-      await saveWebhookEvent(serviceSupabase, payload, "ignored", details.transactionCode, null);
+      console.info("GROW_USER_NOT_FOUND");
+      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, null);
       return jsonResponse({ ok: true, message: "No matching user found" });
     }
 
-    console.info("GROW_USER_FOUND", { transactionCode: details.transactionCode, userId: user.id });
+    console.info("GROW_USER_FOUND");
 
     if (details.isFailedPayment) {
-      console.info("GROW_PAYMENT_FAILED_EVENT_RECEIVED", { transactionCode: details.transactionCode });
+      console.info("GROW_PAYMENT_FAILED_EVENT_RECEIVED");
       await markPaymentFailed(serviceSupabase, user.id, details);
-      await saveWebhookEvent(serviceSupabase, payload, "payment_failed", details.transactionCode, user.id);
+      await saveWebhookEvent(serviceSupabase, auditPayload, "payment_failed", details.transactionCode, user.id);
       return jsonResponse({ ok: true, status: "payment_failed" });
     }
 
     if (!details.isSuccessfulPayment) {
-      await saveWebhookEvent(serviceSupabase, payload, "ignored", details.transactionCode, user.id);
+      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
       return jsonResponse({ ok: true, ignored: true });
     }
 
     const activationResult = await activateSubscription(serviceSupabase, user.id, details);
 
     if (!activationResult.activated) {
-      await saveWebhookEvent(serviceSupabase, payload, "ignored", details.transactionCode, user.id);
+      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
       return jsonResponse({ ok: true, message: "User found but no subscription record found" });
     }
 
-    await saveWebhookEvent(serviceSupabase, payload, "subscription_activated", details.transactionCode, user.id);
+    await saveWebhookEvent(serviceSupabase, auditPayload, "subscription_activated", details.transactionCode, user.id);
 
     return jsonResponse({ ok: true, status: "active" });
-  } catch (error) {
-    console.error("GROW_WEBHOOK_PROCESSING_FAILED", { reason: error instanceof Error ? error.message : "unknown" });
+  } catch {
+    console.error("GROW_WEBHOOK_PROCESSING_FAILED");
     return jsonResponse({ error: "Webhook processing failed" }, 500);
   }
 }
