@@ -2,6 +2,8 @@
 
 Status: staging-verified database corrections. Full account deletion is not yet verified; this is not a self-service flow or Production runbook approval.
 
+Release dependency: the Google grant-revocation fix is in draft PR #29 (`codex/expenses-production-release`, commit `200ccd6`), not in this PR. Do not release account deletion without that fix; `main` does not yet contain the Calendar integration.
+
 ## Scope
 
 - Identify the exact CRM `auth.users.id` after verifying the requester's identity. Do not identify the account by an email appearing in a lead, payment event, or Trainer record.
@@ -28,6 +30,8 @@ During the first QA, a synthetic Auth user with a lead, task, manual expense, ag
 
 For the content QA, Staging lacked the content tables, so their existing repository schema migrations were applied there as Staging-only baseline migrations. The new content-deletion migration was then applied to Staging only. A second synthetic Auth user, lead, content item, and attribution were created. A standalone content deletion returned FK violation `23503` and left both rows intact. Auth Admin deletion then removed the user, content, attribution, and other operational rows. Independent SQL checks found zero content, attribution, synthetic lead, or synthetic Auth rows; both tables retained RLS and their existing policies. No real Google grant/token or CRM Storage deletion was exercised.
 
+On 2026-09-24, a separate live Calendar disconnect/reconnect QA ran only on Staging Preview. The CRM QA user `ronhubian85@gmail.com` connected the Google account `hubianron@gmail.com`. Google's linked-app page showed GoldenFlow CRM with Calendar event read access granted to the Preview domain. After disconnecting in the CRM, the QA user's connection count changed from one to zero, GoldenFlow disappeared from that Google account's linked-app list, and the protected Staging connection for `goldenflowcrm@gmail.com` remained present. Reconnecting restored the grant and a single encrypted Staging connection; a subsequent manual sync finished in the connected/updated state. The QA calendar contained no synchronized event copies, so this did not test deletion of a nonempty event snapshot. No Production action was taken. This tests Calendar disconnect, not full CRM business-account deletion.
+
 Run `tests/crm-account-deletion-staging.mjs` only with the exact Staging URL, a Staging server key, and `CRM_ACCOUNT_DELETION_QA=synthetic-staging-only`. It never accepts a Production URL.
 
 ## Remaining verification
@@ -37,6 +41,6 @@ Run `tests/crm-account-deletion-staging.mjs` only with the exact Staging URL, a 
 - CRM Staging currently has zero Storage buckets and objects. The CRM application code did not show a Storage upload/download path, but that does not rule out manual or provider-side exports.
 - Five encrypted manual full-database Production backups were found under the local `GoldenFlowBackups` directory. The backup script has no age-based retention or deletion schedule. One restore-check record reports a successful isolated restore; none of this proves account-specific erasure from the archives. Do not remove backup files without a separately approved retention and recovery policy.
 - A read-only Production Data API check found seven Grow audit rows, zero linked `user_id` values, and zero payloads with keys beyond `schema_version`, `payment_date`, and `payment_sum`. This verifies the local records at check time, not Grow's provider-side retention.
-- The Calendar disconnect code in the feature release branch did not verify Google's revocation response before removing local credentials. A local isolated fix and synthetic tests exist on `codex/calendar-revoke-account-deletion`, but a live QA revocation and deployment have not been verified.
+- The Calendar disconnect fix checks Google's revocation response before deleting the local connection. It is on draft PR #29 at `200ccd6`, deployed and live-tested in Staging Preview as described above. It is not part of this PR's diff; PR #29 must be integrated before account deletion can rely on it in Production.
 - External systems, including Grow provider records, n8n/Meta ingestion history, and independent Trainer data, need separate inventory and retention decisions. No absence of external copies has been established.
 - The uncommitted CRM privacy draft currently says GoldenFlow does not create an external backup, which conflicts with the verified encrypted manual backups. Do not publish that wording. The separate public-site draft correctly marks backup retention as under review.
