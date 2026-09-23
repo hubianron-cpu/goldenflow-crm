@@ -15,7 +15,7 @@ const admin = createClient(url, key, {
 });
 const marker = randomUUID();
 const email = `codex-crm-deletion-${marker}@example.invalid`;
-const ids = { user: null, lead: null, task: null, activation: null, event: null, audit: null };
+const ids = { user: null, lead: null, task: null, expense: null, credential: null, outbox: null, calendarEvent: null, activation: null, event: null, audit: null };
 let authDeleted = false;
 
 function checked(result, operation) {
@@ -23,8 +23,8 @@ function checked(result, operation) {
   return result.data;
 }
 
-async function count(table, column, value) {
-  const result = await admin.from(table).select("id", { count: "exact", head: true }).eq(column, value);
+async function count(table, column, value, selectColumn = "id") {
+  const result = await admin.from(table).select(selectColumn, { count: "exact", head: true }).eq(column, value);
   checked(result, `count ${table}`);
   return result.count;
 }
@@ -32,8 +32,13 @@ async function count(table, column, value) {
 async function cleanup() {
   if (ids.audit) checked(await admin.from("grow_webhook_events").delete().eq("id", ids.audit), "cleanup audit");
   if (!authDeleted && ids.user) {
+    if (ids.calendarEvent) checked(await admin.from("google_calendar_events").delete().eq("user_id", ids.user).eq("event_id", ids.calendarEvent), "cleanup calendar event");
+    checked(await admin.from("google_calendar_connections").delete().eq("user_id", ids.user), "cleanup calendar connection");
     if (ids.event) checked(await admin.from("client_activation_events").delete().eq("id", ids.event), "cleanup activation event");
     if (ids.activation) checked(await admin.from("client_activations").delete().eq("id", ids.activation).eq("business_id", ids.user), "cleanup activation");
+    if (ids.outbox) checked(await admin.from("crm_client_activation_outbox").delete().eq("id", ids.outbox), "cleanup outbox");
+    if (ids.credential) checked(await admin.from("agent_integration_credentials").delete().eq("id", ids.credential), "cleanup credential");
+    if (ids.expense) checked(await admin.from("manual_expenses").delete().eq("id", ids.expense), "cleanup expense");
     if (ids.task) checked(await admin.from("tasks").delete().eq("id", ids.task).eq("user_id", ids.user), "cleanup task");
     if (ids.lead) checked(await admin.from("leads").delete().eq("id", ids.lead).eq("user_id", ids.user), "cleanup lead");
     checked(await admin.auth.admin.deleteUser(ids.user), "cleanup synthetic Auth user");
@@ -53,6 +58,31 @@ try {
   ids.lead = lead.id;
   const task = checked(await admin.from("tasks").insert({ user_id: ids.user, title: "Synthetic account deletion QA", linked_lead_id: ids.lead }).select("id").single(), "create synthetic task");
   ids.task = task.id;
+  const expense = checked(await admin.from("manual_expenses").insert({ user_id: ids.user, title: "Synthetic account deletion QA", amount_agorot: 50000, due_date: "2026-09-24" }).select("id").single(), "create synthetic expense");
+  ids.expense = expense.id;
+  const credential = checked(await admin.from("agent_integration_credentials").insert({
+    user_id: ids.user,
+    name: "Synthetic account deletion QA",
+    token_prefix: `gflf_${randomBytes(6).toString("hex")}`,
+    token_hash: randomBytes(32).toString("hex"),
+    scopes: ["lead_followups:read"],
+  }).select("id").single(), "create synthetic credential");
+  ids.credential = credential.id;
+  const outbox = checked(await admin.from("crm_client_activation_outbox").insert({ user_id: ids.user, lead_id: ids.lead }).select("id").single(), "create synthetic outbox");
+  ids.outbox = outbox.id;
+  checked(await admin.from("google_calendar_connections").insert({ user_id: ids.user }), "create synthetic local calendar connection");
+  ids.calendarEvent = `synthetic-qa-${marker}`;
+  checked(await admin.from("google_calendar_events").insert({
+    user_id: ids.user,
+    event_id: ids.calendarEvent,
+    title: "Synthetic account deletion QA",
+    starts_at: "2026-09-24T10:00:00Z",
+    ends_at: "2026-09-24T11:00:00Z",
+    event_date: "2026-09-24",
+    all_day: false,
+    amount_agorot: 50000,
+    is_meeting: true,
+  }), "create synthetic local calendar event");
   const activation = checked(await admin.from("client_activations").insert({
     business_id: ids.user,
     crm_deal_id: ids.lead,
@@ -83,6 +113,11 @@ try {
   assert.equal(await count("users", "id", ids.user), 0);
   assert.equal(await count("leads", "user_id", ids.user), 0);
   assert.equal(await count("tasks", "user_id", ids.user), 0);
+  assert.equal(await count("manual_expenses", "user_id", ids.user), 0);
+  assert.equal(await count("agent_integration_credentials", "user_id", ids.user), 0);
+  assert.equal(await count("crm_client_activation_outbox", "user_id", ids.user), 0);
+  assert.equal(await count("google_calendar_connections", "user_id", ids.user, "user_id"), 0);
+  assert.equal(await count("google_calendar_events", "user_id", ids.user, "user_id"), 0);
   assert.equal(await count("client_activations", "business_id", ids.user), 0);
   assert.equal(await count("client_activation_events", "activation_id", ids.activation), 0);
 

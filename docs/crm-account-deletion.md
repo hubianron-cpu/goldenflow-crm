@@ -22,7 +22,7 @@ After the authorized Auth Admin deletion, verify zero target rows in `users`, `l
 
 ## Staging QA evidence
 
-During this QA, a synthetic Auth user with a lead, task, Activation row, Activation event, and minimized Grow audit row was deleted in `goldenflow-crm-staging` (`pzxwaoghixsqcstfrorn`) through the Auth Admin API. The operational rows and Auth user disappeared; the audit row lost its `user_id` and was then removed because it was synthetic. Independent aggregate checks found no synthetic remnants. The `business_center_content_items` branch of the migration, a real Google revocation, and a CRM Storage deletion were not exercised in that environment.
+During this QA, a synthetic Auth user with a lead, task, manual expense, agent credential, activation outbox row, local Calendar connection and event, Activation row and event, and minimized Grow audit row was deleted in `goldenflow-crm-staging` (`pzxwaoghixsqcstfrorn`) through the Auth Admin API. The operational rows and Auth user disappeared; the audit row lost its `user_id` and was then removed because it was synthetic. Independent aggregate checks found no synthetic remnants. The Calendar rows had no real Google grant or token. The `business_center_content_items` branch of the migration, a real Google revocation, and a CRM Storage deletion were not exercised in that environment.
 
 Run `tests/crm-account-deletion-staging.mjs` only with the exact Staging URL, a Staging server key, and `CRM_ACCOUNT_DELETION_QA=synthetic-staging-only`. It never accepts a Production URL.
 
