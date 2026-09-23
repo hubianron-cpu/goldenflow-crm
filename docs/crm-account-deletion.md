@@ -5,6 +5,7 @@ Status: staging-verified database correction. Full account deletion is not yet v
 ## Scope
 
 - Identify the exact CRM `auth.users.id` after verifying the requester's identity. Do not identify the account by an email appearing in a lead, payment event, or Trainer record.
+- Supabase Auth user deletion does not itself invalidate already-issued JWTs immediately. Check the application's session checks and configured token lifetime; do not describe account deletion as instant token revocation.
 - Cancel billing separately in Grow and record the paid-through date before closing access. Deleting a CRM account does not cancel a Grow mandate.
 - Pause CRM-to-Activation dispatch and resolve in-flight deliveries before deleting the account. Local `client_activations` and child events belong to the CRM business ID and are deleted; Trainer clients are a separate service and must not be deleted automatically.
 - If the account has a Google Calendar connection, revoke its Google grant before deleting the encrypted refresh token. Deleting the database connection alone is not evidence of remote revocation.
@@ -27,9 +28,11 @@ Run `tests/crm-account-deletion-staging.mjs` only with the exact Staging URL, a 
 
 ## Remaining verification
 
-- Production schema, Storage inventory, and backup configuration require a read-only account with access to `vzzbegctrqnxxsrfmvjo`. The currently connected Supabase account returned `You do not have access to this project`; do not infer Production status from Staging.
+- Production foreign-key definitions and provider backup configuration require a read-only account with Dashboard/SQL access to `vzzbegctrqnxxsrfmvjo`. The currently connected Supabase account returned `You do not have access to this project`; do not infer those details from Staging.
+- A separate server-side, read-only Production Storage API check found zero buckets. A read-only Data API check confirmed `business_center_content_items` exists with zero rows, but neither API exposes the actual foreign-key delete action. The Production schema and provider backup configuration remain unverified.
 - CRM Staging currently has zero Storage buckets and objects. The CRM application code did not show a Storage upload/download path, but that does not rule out manual or provider-side exports.
 - Five encrypted manual full-database Production backups were found under the local `GoldenFlowBackups` directory. The backup script has no age-based retention or deletion schedule. One restore-check record reports a successful isolated restore; none of this proves account-specific erasure from the archives. Do not remove backup files without a separately approved retention and recovery policy.
+- A read-only Production Data API check found seven Grow audit rows, zero linked `user_id` values, and zero payloads with keys beyond `schema_version`, `payment_date`, and `payment_sum`. This verifies the local records at check time, not Grow's provider-side retention.
 - The Calendar disconnect code in the feature release branch did not verify Google's revocation response before removing local credentials. A local isolated fix and synthetic tests exist on `codex/calendar-revoke-account-deletion`, but a live QA revocation and deployment have not been verified.
 - External systems, including Grow provider records, n8n/Meta ingestion history, and independent Trainer data, need separate inventory and retention decisions. No absence of external copies has been established.
 - The uncommitted CRM privacy draft currently says GoldenFlow does not create an external backup, which conflicts with the verified encrypted manual backups. Do not publish that wording. The separate public-site draft correctly marks backup retention as under review.
