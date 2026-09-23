@@ -1,6 +1,6 @@
 # CRM business account deletion
 
-Status: staging-verified database correction. Not a self-service deletion flow or Production runbook approval.
+Status: staging-verified database correction. Full account deletion is not yet verified; this is not a self-service flow or Production runbook approval.
 
 ## Scope
 
@@ -24,3 +24,11 @@ After the authorized Auth Admin deletion, verify zero target rows in `users`, `l
 During this QA, a synthetic Auth user with a lead, task, Activation row, Activation event, and minimized Grow audit row was deleted in `goldenflow-crm-staging` (`pzxwaoghixsqcstfrorn`) through the Auth Admin API. The operational rows and Auth user disappeared; the audit row lost its `user_id` and was then removed because it was synthetic. Independent aggregate checks found no synthetic remnants. The `business_center_content_items` branch of the migration, a real Google revocation, and a CRM Storage deletion were not exercised in that environment.
 
 Run `tests/crm-account-deletion-staging.mjs` only with the exact Staging URL, a Staging server key, and `CRM_ACCOUNT_DELETION_QA=synthetic-staging-only`. It never accepts a Production URL.
+
+## Remaining verification
+
+- Production schema, Storage inventory, and backup configuration require a read-only account with access to `vzzbegctrqnxxsrfmvjo`. The currently connected Supabase account returned `You do not have access to this project`; do not infer Production status from Staging.
+- CRM Staging currently has zero Storage buckets and objects. The CRM application code did not show a Storage upload/download path, but that does not rule out manual or provider-side exports.
+- Five encrypted manual full-database Production backups were found under the local `GoldenFlowBackups` directory. The backup script has no age-based retention or deletion schedule. One restore-check record reports a successful isolated restore; none of this proves account-specific erasure from the archives. Do not remove backup files without a separately approved retention and recovery policy.
+- The Calendar disconnect code in the feature release branch did not verify Google's revocation response before removing local credentials. A local isolated fix and synthetic tests exist on `codex/calendar-revoke-account-deletion`, but a live QA revocation and deployment have not been verified.
+- External systems, including Grow provider records, n8n/Meta ingestion history, and independent Trainer data, need separate inventory and retention decisions. No absence of external copies has been established.
