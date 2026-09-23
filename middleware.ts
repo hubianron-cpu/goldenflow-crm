@@ -89,7 +89,7 @@ export async function middleware(request: NextRequest) {
     if (shouldCheckSubscription(request.nextUrl.pathname)) {
       const { data: subscription, error: subscriptionError } = await supabase
         .from("user_subscriptions")
-        .select("user_id,status,plan_name,trial_start_at,trial_end_at,upgraded_at,created_at,updated_at")
+        .select("user_id,status,plan_name,trial_start_at,trial_end_at,renewal_cancelled_at,access_until,upgraded_at,created_at,updated_at")
         .eq("user_id", user.id)
         .maybeSingle();
 

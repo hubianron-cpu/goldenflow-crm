@@ -491,7 +491,9 @@ async function markPaymentFailed(
       status: "payment_failed",
       updated_at: nowIso,
     })
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    // A verified, already-paid cancellation must not be revoked by a late failure/cancel event.
+    .is("renewal_cancelled_at", null);
 
   if (error) {
     logSupabaseError("GROW_PAYMENT_FAILURE_UPDATE_FAILED", error);

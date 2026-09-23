@@ -151,6 +151,8 @@ export type Database = {
           grow_last_payment_date: string | null;
           grow_last_payment_sum: number | null;
           grow_transaction_code: string | null;
+          renewal_cancelled_at: string | null;
+          access_until: string | null;
           plan_name: string | null;
           status: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at: string | null;
@@ -166,6 +168,8 @@ export type Database = {
           grow_last_payment_date?: string | null;
           grow_last_payment_sum?: number | null;
           grow_transaction_code?: string | null;
+          renewal_cancelled_at?: string | null;
+          access_until?: string | null;
           plan_name?: string | null;
           status?: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at?: string | null;
@@ -181,6 +185,8 @@ export type Database = {
           grow_last_payment_date?: string | null;
           grow_last_payment_sum?: number | null;
           grow_transaction_code?: string | null;
+          renewal_cancelled_at?: string | null;
+          access_until?: string | null;
           plan_name?: string | null;
           status?: "trial" | "active" | "expired" | "cancelled" | "payment_failed" | "past_due";
           trial_start_at?: string | null;

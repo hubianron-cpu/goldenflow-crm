@@ -16,7 +16,7 @@ export default function UpgradePage() {
     <main className="mx-auto flex min-h-screen max-w-3xl items-center px-4 py-8">
       <section className="panel w-full p-6 text-center sm:p-8">
         <p className="text-sm font-bold text-gold-soft">GoldenFlow</p>
-        <h1 className="mt-4 text-3xl font-black leading-tight text-white sm:text-5xl">הניסיון שלך הסתיים</h1>
+        <h1 className="mt-4 text-3xl font-black leading-tight text-white sm:text-5xl">הגישה למערכת אינה פעילה</h1>
         <p className="mx-auto mt-4 max-w-2xl text-base leading-8 text-zinc-300">
           כדי להמשיך להשתמש ב-GoldenFlow, אפשר לשדרג את המנוי ולהפעיל את החשבון שלך.
         </p>

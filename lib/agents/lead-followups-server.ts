@@ -83,7 +83,7 @@ export async function authenticateLeadFollowupsRequest(
 
   const { data: subscription, error: subscriptionError } = await admin
     .from("user_subscriptions")
-    .select("status,trial_end_at")
+    .select("status,trial_end_at,renewal_cancelled_at,access_until")
     .eq("user_id", credential.user_id)
     .maybeSingle();
 
