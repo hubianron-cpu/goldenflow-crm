@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 import { AdminCreateUserForm } from "@/components/admin/create-user-form";
 import { isAdminEmail } from "@/lib/admin";
@@ -53,6 +54,9 @@ export default async function AdminCreateUserPage() {
         <div className="mt-7">
           <AdminCreateUserForm />
         </div>
+        <Link className="mt-6 inline-block text-sm font-bold text-gold-soft underline" href="/admin/subscriptions/record-cancellation">
+          תיעוד ביטול חידוש לאחר אימות ב־Grow
+        </Link>
       </section>
     </main>
   );

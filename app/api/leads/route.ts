@@ -88,7 +88,7 @@ function getTrialLeadLimitResponse() {
 async function getSubscriptionAccessForUser(supabase: LeadDataClient, userId: string) {
   const { data, error } = await supabase
     .from("user_subscriptions")
-    .select("status,trial_end_at")
+    .select("status,trial_end_at,renewal_cancelled_at,access_until")
     .eq("user_id", userId)
     .maybeSingle();
 

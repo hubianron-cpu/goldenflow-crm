@@ -19,7 +19,7 @@ export async function requireSubscriptionAccess(userId: string): Promise<Subscri
   const supabase = await createServerClient();
   const { data, error } = await supabase
     .from("user_subscriptions")
-    .select("user_id,status,plan_name,trial_start_at,trial_end_at,upgraded_at,created_at,updated_at")
+    .select("user_id,status,plan_name,trial_start_at,trial_end_at,renewal_cancelled_at,access_until,upgraded_at,created_at,updated_at")
     .eq("user_id", userId)
     .maybeSingle();
 
