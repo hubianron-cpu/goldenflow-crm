@@ -10,5 +10,5 @@
     "rootDir": "..",
     "target": "ES2022"
   },
-  "include": ["subscription-cancellation.test.ts", "../lib/subscriptions.ts"]
+  "include": ["subscription-cancellation.test.ts", "../lib/subscriptions.ts", "../lib/subscription-cancellation.ts"]
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { toJerusalemUtcIso } from "@/lib/subscription-cancellation";
 
 export function RecordCancellationForm() {
   const [message, setMessage] = useState("");
@@ -15,9 +16,9 @@ export function RecordCancellationForm() {
     const form = event.currentTarget;
     const values = new FormData(form);
     const localEnd = String(values.get("accessUntil") || "");
-    const date = new Date(localEnd);
-    if (!localEnd || !Number.isFinite(date.getTime())) {
-      setMessage("יש לבחור מועד סיום תקין");
+    const accessUntil = toJerusalemUtcIso(localEnd);
+    if (!accessUntil) {
+      setMessage("יש לבחור מועד סיום תקין וחד־משמעי לפי שעון ישראל");
       setPending(false);
       return;
     }
@@ -29,7 +30,7 @@ export function RecordCancellationForm() {
         body: JSON.stringify({
           userId: values.get("userId"),
           growDirectDebitId: values.get("growDirectDebitId"),
-          accessUntil: date.toISOString(),
+          accessUntil,
           growCancellationVerified: values.get("growCancellationVerified") === "on",
         }),
       });
@@ -52,7 +53,7 @@ export function RecordCancellationForm() {
       <label className="block text-sm text-zinc-200">מזהה הוראת הקבע ב־Grow
         <input className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 p-3" name="growDirectDebitId" required autoComplete="off" />
       </label>
-      <label className="block text-sm text-zinc-200">מועד סיום התקופה ששולמה (שעון מקומי)
+      <label className="block text-sm text-zinc-200">מועד סיום התקופה ששולמה (שעון ישראל)
         <input className="mt-2 w-full rounded-xl border border-white/15 bg-white/5 p-3" name="accessUntil" type="datetime-local" required />
       </label>
       <label className="flex items-start gap-2 text-sm text-zinc-200">

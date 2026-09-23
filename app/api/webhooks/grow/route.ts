@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import { growAuditPayload } from "@/lib/grow/audit";
+import { canReactivateFromGrowPayment, updatedGrowMandateId } from "@/lib/subscription-cancellation";
 
 export const runtime = "nodejs";
 
@@ -436,7 +437,7 @@ async function activateSubscription(
 
   const { data: existingSubscription, error: existingError } = await serviceSupabase
     .from("user_subscriptions")
-    .select("user_id,created_at,trial_start_at,upgraded_at")
+    .select("user_id,created_at,trial_start_at,upgraded_at,grow_direct_debit_id,renewal_cancelled_at")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -450,8 +451,17 @@ async function activateSubscription(
     return { activated: false, reason: "missing_subscription" as const };
   }
 
+  if (!canReactivateFromGrowPayment(
+    existingSubscription.renewal_cancelled_at,
+    existingSubscription.grow_direct_debit_id,
+    details.directDebitId,
+  )) {
+    console.info("GROW_CANCELLED_MANDATE_SUCCESS_IGNORED");
+    return { activated: false, reason: "cancelled_mandate" as const };
+  }
+
   const payload = {
-    grow_direct_debit_id: details.directDebitId || null,
+    grow_direct_debit_id: updatedGrowMandateId(existingSubscription.grow_direct_debit_id, details.directDebitId),
     grow_last_payment_date: details.paymentDate || nowIso,
     grow_last_payment_sum: details.paymentSum,
     grow_transaction_code: details.transactionCode || null,
@@ -460,14 +470,28 @@ async function activateSubscription(
     updated_at: nowIso,
     upgraded_at: existingSubscription?.upgraded_at || nowIso,
     user_id: userId,
+    ...(existingSubscription.renewal_cancelled_at ? { renewal_cancelled_at: null, access_until: null } : {}),
   };
 
   console.info("GROW_SUBSCRIPTION_UPDATE_STARTED");
-  const result = await serviceSupabase.from("user_subscriptions").update(payload).eq("user_id", userId);
+  let update = serviceSupabase.from("user_subscriptions").update(payload).eq("user_id", userId);
+  if (existingSubscription.renewal_cancelled_at && existingSubscription.grow_direct_debit_id) {
+    update = update
+      .eq("grow_direct_debit_id", existingSubscription.grow_direct_debit_id)
+      .eq("renewal_cancelled_at", existingSubscription.renewal_cancelled_at);
+  } else {
+    update = update.is("renewal_cancelled_at", null);
+  }
+  const result = await update.select("user_id").maybeSingle();
 
   if (result.error) {
     logSupabaseError("GROW_SUBSCRIPTION_UPDATE_FAILED", result.error);
     throw new Error("GROW_SUBSCRIPTION_ACTIVATION_FAILED");
+  }
+
+  if (!result.data) {
+    console.info("GROW_SUBSCRIPTION_STATE_CHANGED");
+    return { activated: false, reason: "state_changed" as const };
   }
 
   console.info("GROW_SUBSCRIPTION_UPDATED");
@@ -575,7 +599,7 @@ export async function POST(request: Request) {
 
     if (!activationResult.activated) {
       await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
-      return jsonResponse({ ok: true, message: "User found but no subscription record found" });
+      return jsonResponse({ ok: true, ignored: true, reason: activationResult.reason });
     }
 
     await saveWebhookEvent(serviceSupabase, auditPayload, "subscription_activated", details.transactionCode, user.id);
