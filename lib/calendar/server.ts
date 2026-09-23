@@ -145,12 +145,20 @@ export async function syncCalendar(userId: string) {
 }
 export async function disconnectCalendar(userId: string) {
   const connection = await readConnection(userId);
+  if (connection?.token_ciphertext) {
+    const config = calendarConfig();
+    if (!config) throw new Error("Calendar configuration unavailable");
+    let response: Response;
+    try {
+      response = await fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: decryptToken(connection.token_ciphertext, userId, config.key) }), signal: AbortSignal.timeout(10000) });
+    } catch {
+      throw new Error("Google authorization could not be revoked; retry disconnect");
+    }
+    if (!response.ok) {
+      const body = await response.json().catch(() => null) as { error?: string } | null;
+      if (response.status !== 400 || body?.error !== "invalid_token") throw new Error("Google authorization could not be revoked; retry disconnect");
+    }
+  }
   const { error } = await calendarAdmin().from("google_calendar_connections").delete().eq("user_id", userId);
   if (error) throw new Error("Disconnect failed");
-  const config = calendarConfig();
-  if (connection?.token_ciphertext && config) {
-    try {
-      await fetch("https://oauth2.googleapis.com/revoke", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ token: decryptToken(connection.token_ciphertext, userId, config.key) }), signal: AbortSignal.timeout(10000) });
-    } catch { /* Local credentials and cached events have already been removed. */ }
-  }
 }

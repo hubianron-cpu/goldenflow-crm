@@ -62,7 +62,12 @@ function harness() {
         if (grant === "authorization_code") assert.ok(options.body.get("code_verifier"));
         return { ok: true, json: async () => ({ access_token: "synthetic-access", refresh_token: "synthetic-refresh", scope: "https://www.googleapis.com/auth/calendar.events.readonly" }) };
       }
-      if (String(url).includes("/revoke")) return { ok: true };
+      if (String(url).includes("/revoke")) {
+        if (failure === "revoke-network") throw new Error("synthetic transport failure");
+        if (failure === "revoke-http") return { ok: false, status: 503, json: async () => ({ error: "unavailable" }) };
+        if (failure === "revoke-invalid-token") return { ok: false, status: 400, json: async () => ({ error: "invalid_token" }) };
+        return { ok: true };
+      }
       const parsed = new URL(url);
       assert.equal(parsed.origin, "https://www.googleapis.com");
       assert.equal(parsed.searchParams.get("singleEvents"), "true");
@@ -121,4 +126,18 @@ test("revoked grants require reconnect; sync lease prevents overlap; disconnect 
   await h.api.disconnectCalendar("QA-A");
   assert.equal(h.rows.has("QA-A"), false);
   assert.ok(h.calls.includes("https://oauth2.googleapis.com/revoke"));
+});
+test("disconnect retains encrypted credentials until Google revocation succeeds", async () => {
+  const h = harness(); const auth = await h.api.startConnection("QA-A");
+  await h.api.finishConnection("QA-A", "code", auth.state);
+  const encrypted = h.rows.get("QA-A").token_ciphertext;
+  h.setFailure("revoke-http");
+  await assert.rejects(h.api.disconnectCalendar("QA-A"), /could not be revoked/);
+  assert.equal(h.rows.get("QA-A").token_ciphertext, encrypted);
+  h.setFailure("revoke-network");
+  await assert.rejects(h.api.disconnectCalendar("QA-A"), /could not be revoked/);
+  assert.equal(h.rows.get("QA-A").token_ciphertext, encrypted);
+  h.setFailure("revoke-invalid-token");
+  await h.api.disconnectCalendar("QA-A");
+  assert.equal(h.rows.has("QA-A"), false);
 });
