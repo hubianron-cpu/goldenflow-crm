@@ -2,6 +2,11 @@ import Link from "next/link";
 import { getCurrentUserSubscription } from "@/lib/subscriptions";
 
 function getTrialStatusText(access: Awaited<ReturnType<typeof getCurrentUserSubscription>>["access"]) {
+  if (access.accessUntil) {
+    return access.hasAccess
+      ? `החידוש בוטל. הגישה למערכת זמינה עד ${new Intl.DateTimeFormat("he-IL", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jerusalem" }).format(new Date(access.accessUntil))}`
+      : "תקופת הגישה ששולמה הסתיימה";
+  }
   if (access.isActive) {
     return "המנוי שלך פעיל";
   }
