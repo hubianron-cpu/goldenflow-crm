@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
+import { closeCrmAccountInOrder } from "../lib/account-closure/order.mjs";
 
 const STAGING_URL = "https://pzxwaoghixsqcstfrorn.supabase.co";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -127,7 +128,21 @@ try {
   ids.audit = audit.id;
 
   assert.equal(await count("client_activations", "business_id", ids.user), 1);
-  checked(await admin.auth.admin.deleteUser(ids.user), "delete synthetic Auth user");
+  await closeCrmAccountInOrder(ids.user, email, {
+    async getUser(id) {
+      return checked(await admin.auth.admin.getUserById(id), "verify synthetic Auth identity").user;
+    },
+    async disconnectCalendar(id) {
+      // This synthetic row has no Google token. Live revocation is a separate QA gate.
+      checked(await admin.from("google_calendar_connections").delete().eq("user_id", id), "disconnect synthetic calendar");
+    },
+    async hasCalendarConnection(id) {
+      return (await count("google_calendar_connections", "user_id", id, "user_id")) !== 0;
+    },
+    async deleteAuthUser(id) {
+      checked(await admin.auth.admin.deleteUser(id), "delete synthetic Auth user");
+    },
+  });
   authDeleted = true;
 
   const deletedAuth = await admin.auth.admin.getUserById(ids.user);
