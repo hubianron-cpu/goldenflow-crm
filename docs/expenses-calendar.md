@@ -29,7 +29,7 @@ Scope: `https://www.googleapis.com/auth/calendar.events.readonly`. Primary calen
 - Initial sync runs after OAuth. Subsequent sync is explicit via the sync button; this is not a realtime/push integration. Last-sync time is visible; snapshots older than 24 hours or lacking horizon coverage show a stale warning.
 - Full bounded snapshots cover this week through 100 days ahead. Pagination is completed before transactional publication. More than 10,000 provider events fails without publishing partial data. Changed/removed amounts, moved or cancelled/deleted events are reconciled on the next successful sync.
 - Manual and Calendar expenses can be marked paid/cancelled locally; these overrides survive sync for the same event ID. Google owns title/date/amount. No manual recurrence editor in V1; recurring Google events are supported.
-- Disconnect deletes the cached Calendar events/credentials, leaves manual expenses, and attempts Google token revocation. It does not delete Google events.
+- Disconnect revokes the Google grant before deleting the local Calendar credentials and cached events. A revocation failure leaves the local connection intact for retry; an already-invalid token is treated as revoked. Manual expenses remain, and Google events are not deleted.
 
 ## Verification
 
