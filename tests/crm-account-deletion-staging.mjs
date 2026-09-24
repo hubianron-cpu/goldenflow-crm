@@ -15,7 +15,7 @@ const admin = createClient(url, key, {
 });
 const marker = randomUUID();
 const email = `codex-crm-deletion-${marker}@example.invalid`;
-const ids = { user: null, lead: null, content: null, attribution: null, task: null, expense: null, credential: null, outbox: null, calendarEvent: null, activation: null, event: null, audit: null };
+const ids = { user: null, lead: null, content: null, attribution: null, roi: null, task: null, expense: null, credential: null, outbox: null, calendarEvent: null, activation: null, event: null, audit: null };
 let authDeleted = false;
 
 function checked(result, operation) {
@@ -42,6 +42,7 @@ async function cleanup() {
     if (ids.task) checked(await admin.from("tasks").delete().eq("id", ids.task).eq("user_id", ids.user), "cleanup task");
     if (ids.attribution) checked(await admin.from("business_center_lead_attributions").delete().eq("id", ids.attribution), "cleanup attribution");
     if (ids.content) checked(await admin.from("business_center_content_items").delete().eq("id", ids.content), "cleanup content");
+    if (ids.roi) checked(await admin.from("roi_tools").delete().eq("id", ids.roi), "cleanup ROI tool");
     if (ids.lead) checked(await admin.from("leads").delete().eq("id", ids.lead).eq("user_id", ids.user), "cleanup lead");
     checked(await admin.auth.admin.deleteUser(ids.user), "cleanup synthetic Auth user");
   }
@@ -58,6 +59,8 @@ try {
 
   const lead = checked(await admin.from("leads").insert({ user_id: ids.user, full_name: "Synthetic Account Deletion QA" }).select("id").single(), "create synthetic lead");
   ids.lead = lead.id;
+  const roi = checked(await admin.from("roi_tools").insert({ user_id: ids.user, name: "Synthetic Account Deletion QA" }).select("id").single(), "create synthetic ROI tool");
+  ids.roi = roi.id;
   const content = checked(await admin.from("business_center_content_items").insert({
     user_id: ids.user,
     title: "Synthetic Account Deletion QA",
@@ -133,6 +136,7 @@ try {
   assert.equal(await count("leads", "user_id", ids.user), 0);
   assert.equal(await count("business_center_content_items", "user_id", ids.user), 0);
   assert.equal(await count("business_center_lead_attributions", "user_id", ids.user), 0);
+  assert.equal(await count("roi_tools", "user_id", ids.user), 0);
   assert.equal(await count("tasks", "user_id", ids.user), 0);
   assert.equal(await count("manual_expenses", "user_id", ids.user), 0);
   assert.equal(await count("agent_integration_credentials", "user_id", ids.user), 0);
@@ -152,6 +156,7 @@ try {
     assert.equal(await count("client_activations", "business_id", ids.user), 0);
     assert.equal(await count("business_center_content_items", "id", ids.content), 0);
     assert.equal(await count("business_center_lead_attributions", "id", ids.attribution), 0);
+    assert.equal(await count("roi_tools", "id", ids.roi), 0);
     assert.equal(await count("grow_webhook_events", "id", ids.audit), 0);
     console.log("CRM_STAGING_SYNTHETIC_CLEANUP_OK=true");
   }
