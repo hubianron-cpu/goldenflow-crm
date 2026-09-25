@@ -29,7 +29,11 @@ Scope: `https://www.googleapis.com/auth/calendar.events.readonly`. Primary calen
 - Initial sync runs after OAuth. Subsequent sync is explicit via the sync button; this is not a realtime/push integration. Last-sync time is visible; snapshots older than 24 hours or lacking horizon coverage show a stale warning.
 - Full bounded snapshots cover this week through 100 days ahead. Pagination is completed before transactional publication. More than 10,000 provider events fails without publishing partial data. Changed/removed amounts, moved or cancelled/deleted events are reconciled on the next successful sync.
 - Manual and Calendar expenses can be marked paid/cancelled locally; these overrides survive sync for the same event ID. Google owns title/date/amount. No manual recurrence editor in V1; recurring Google events are supported.
-- Disconnect revokes the Google grant before deleting the local Calendar credentials and cached events. A revocation failure leaves the local connection intact for retry; an already-invalid token is treated as revoked. Manual expenses remain, and Google events are not deleted.
+- Disconnect revokes the Google grant before deleting the local Calendar credentials and cached events. A revocation failure leaves the local connection intact for retry; an already-invalid token is treated as revoked. The local delete is conditional on the connection generation read before revocation, so a concurrent replacement is not deleted and the caller must retry. This guard does not prove that a replacement token still works after Google revokes access for the same Google account. Manual expenses remain, and Google events are not deleted.
+
+## Account-closure release gate
+
+This Calendar integration does not implement or authorize CRM business-account deletion in Production. Keep that workflow unavailable until the exact account has verified Grow billing cancellation and paid-through access, a CRM Storage inventory and required object removal or confirmed absence, and a current recoverable backup with its retention and copies accounted for. Record a target-specific preflight and obtain separate approval for Production deployment and for deletion. Calendar disconnect alone does not satisfy these gates.
 
 ## Verification
 

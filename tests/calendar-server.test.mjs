@@ -30,9 +30,12 @@ function harness() {
             return { data: null, error: null };
           }
           const row = [...rows.values()].find(r => filters.every(f => f(r)));
-          if (!row) return { data: null, error: null };
+          if (!row) return { data: op === "delete" ? [] : null, error: null };
           if (op === "update") Object.assign(row, values);
-          if (op === "delete") rows.delete(row.user_id);
+          if (op === "delete") {
+            rows.delete(row.user_id);
+            return { data: [structuredClone(row)], error: null };
+          }
           return { data: structuredClone(row), error: null };
         },
       };
@@ -63,6 +66,10 @@ function harness() {
         return { ok: true, json: async () => ({ access_token: "synthetic-access", refresh_token: "synthetic-refresh", scope: "https://www.googleapis.com/auth/calendar.events.readonly" }) };
       }
       if (String(url).includes("/revoke")) {
+        if (failure === "reconnect-on-revoke") {
+          rows.get("QA-A").generation = "reconnected";
+          return { ok: true };
+        }
         if (failure === "revoke-network") throw new Error("synthetic transport failure");
         if (failure === "revoke-http") return { ok: false, status: 503, json: async () => ({ error: "unavailable" }) };
         if (failure === "revoke-invalid-token") return { ok: false, status: 400, json: async () => ({ error: "invalid_token" }) };
@@ -140,4 +147,11 @@ test("disconnect retains encrypted credentials until Google revocation succeeds"
   h.setFailure("revoke-invalid-token");
   await h.api.disconnectCalendar("QA-A");
   assert.equal(h.rows.has("QA-A"), false);
+});
+test("disconnect does not delete a connection replaced while revocation runs", async () => {
+  const h = harness(); const auth = await h.api.startConnection("QA-A");
+  await h.api.finishConnection("QA-A", "code", auth.state);
+  h.setFailure("reconnect-on-revoke");
+  await assert.rejects(h.api.disconnectCalendar("QA-A"), /Connection changed/);
+  assert.equal(h.rows.get("QA-A").generation, "reconnected");
 });

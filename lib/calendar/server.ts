@@ -145,6 +145,7 @@ export async function syncCalendar(userId: string) {
 }
 export async function disconnectCalendar(userId: string) {
   const connection = await readConnection(userId);
+  if (!connection) return;
   if (connection?.token_ciphertext) {
     const config = calendarConfig();
     if (!config) throw new Error("Calendar configuration unavailable");
@@ -159,6 +160,7 @@ export async function disconnectCalendar(userId: string) {
       if (response.status !== 400 || body?.error !== "invalid_token") throw new Error("Google authorization could not be revoked; retry disconnect");
     }
   }
-  const { error } = await calendarAdmin().from("google_calendar_connections").delete().eq("user_id", userId);
-  if (error) throw new Error("Disconnect failed");
+  const { data, error } = await calendarAdmin().from("google_calendar_connections")
+    .delete().eq("user_id", userId).eq("generation", connection.generation).select("user_id");
+  if (error || data?.length !== 1) throw new Error("Connection changed during disconnect; retry");
 }
