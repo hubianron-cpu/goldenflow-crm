@@ -95,6 +95,8 @@ test("expense UI: real component, desktop/mobile/RTL, themes, form and pending s
     fixture = { ...structuredClone(initial), manual: [], events: [], connection: { ...initial.connection, connected: false, lastSync: null } };
     await page.goto(base);
     await page.getByRole("heading", { name: "חבר את יומן Google שלך", exact: true }).waitFor();
+    assert.ok(await page.getByText("הרשאת הקריאה מאפשרת גישה לאירועים ביומנים", { exact: false }).isVisible());
+    assert.equal(await page.getByRole("link", { name: "למידע על השימוש בנתוני היומן" }).getAttribute("href"), "https://www.goldenflowcrm.com/privacy");
     assert.ok(await page.getByRole("button", { name: "לחץ כאן כדי לחבר את יומן Google שלך", exact: true }).isDisabled());
     assert.ok(await page.getByRole("button", { name: "+ הוסף הוצאה ידנית", exact: true }).isEnabled());
     await page.screenshot({ path: ".test-dist/expenses-visual/360-onboarding.png", fullPage: true });

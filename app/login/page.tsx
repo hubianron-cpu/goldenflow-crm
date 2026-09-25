@@ -86,6 +86,9 @@ export default async function LoginPage({
               לרכישת מנוי בצורה מאובטחת
             </a>
           </div>
+          <p className="mt-5 text-center text-sm text-zinc-400">
+            איך אנו משתמשים במידע שלך? <a href="https://www.goldenflowcrm.com/privacy" className="font-semibold text-gold-soft underline underline-offset-4 hover:text-gold">מדיניות הפרטיות</a>
+          </p>
         </section>
       </div>
     </main>

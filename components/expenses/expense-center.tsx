@@ -112,12 +112,15 @@ export function ExpenseCenter() {
       <p className="mt-5 font-semibold">יש הוצאה? כתוב את הסכום בשם האירוע.</p>
       <p className={`mt-2 text-sm ${secondary}`}>לדוגמה: רואה חשבון - 500 ₪</p>
       <p className={`mt-2 text-sm leading-6 ${secondary}`}>אם לא כתבת סכום בשם האירוע, GoldenFlow לא יחשיב אותו כהוצאה.</p>
+      <p className={`mt-4 max-w-xl text-sm leading-7 ${secondary}`}>
+        החיבור הוא לבחירתך. הרשאת הקריאה מאפשרת גישה לאירועים ביומנים שיש לחשבון Google שלך גישה אליהם, אך GoldenFlow מסנכרנת בפועל רק את היומן הראשי לזיהוי הוצאות ולסיכום פגישות. <a href="https://www.goldenflowcrm.com/privacy" className="font-semibold text-[var(--color-gold)] underline underline-offset-4">למידע על השימוש בנתוני היומן</a>
+      </p>
       <div className="mt-6 flex flex-wrap gap-3">
         <form action="/api/calendar/connect" method="post"><button disabled={!data.connection.configured || busy} className="button-primary w-full">לחץ כאן כדי לחבר את יומן Google שלך</button></form>
         <button className="button-secondary" disabled={busy} onClick={() => openExpense()}>+ הוסף הוצאה ידנית</button>
       </div>
       {!data.connection.configured && <p className={`mt-3 text-xs leading-6 ${secondary}`}>חיבור היומן עדיין אינו זמין. אפשר להתחיל עם הוצאות ידניות.</p>}
-      <p className={`mt-3 text-xs ${secondary}`}>קריאה בלבד מהיומן הראשי. GoldenFlow לא משנה אירועים ביומן שלך.</p>
+      <p className={`mt-3 text-xs ${secondary}`}>קריאה בלבד. GoldenFlow לא משנה אירועים ביומן שלך.</p>
     </section>}
     {data && result && (connected || data.manual.length > 0) && <>
       <section className={`${surface} overflow-hidden p-5 sm:p-8`} aria-label="תחזית הוצאות">
