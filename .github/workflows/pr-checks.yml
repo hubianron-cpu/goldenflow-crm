@@ -16,6 +16,7 @@ jobs:
         with:
           node-version: '22'
       - run: npm ci
+      - run: npm audit --audit-level=moderate
       - run: npm run typecheck
       - run: npm run lint
       - name: Compile and run offline regression tests
@@ -37,4 +38,5 @@ jobs:
           if [[ -f tests/calendar-server.test.mjs ]]; then
             node --test tests/calendar-server.test.mjs
           fi
+          node --test tests/work-schedule-excel.test.mjs
       - run: npm run build
