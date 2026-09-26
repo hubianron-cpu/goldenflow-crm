@@ -76,6 +76,9 @@ export function AppShell({
                   התנתקות
                 </button>
               </form>
+              <a href="https://www.goldenflowcrm.com/privacy" className="relative mt-5 block text-center text-sm font-semibold text-gold-soft underline underline-offset-4 hover:text-gold">
+                מדיניות הפרטיות
+              </a>
             </div>
         </aside>
 

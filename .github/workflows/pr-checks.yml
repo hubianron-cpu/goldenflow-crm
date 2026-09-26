@@ -1,0 +1,42 @@
+name: PR checks
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npm audit --audit-level=moderate
+      - run: npm run typecheck
+      - run: npm run lint
+      - name: Compile and run offline regression tests
+        shell: bash
+        run: |
+          for config in \
+            tests/tsconfig.json \
+            tests/tsconfig.sales-intelligence.json \
+            tests/tsconfig.client-activation.json \
+            tests/tsconfig.sales-activity.json \
+            tests/tsconfig.expenses.json \
+            tests/tsconfig.grow-audit.json \
+            tests/tsconfig.subscription-cancellation.json; do
+            if [[ -f "$config" ]]; then
+              npx tsc -p "$config"
+            fi
+          done
+          node --test .test-dist/tests/*.test.js
+          if [[ -f tests/calendar-server.test.mjs ]]; then
+            node --test tests/calendar-server.test.mjs tests/calendar-disconnect-access.test.mjs tests/calendar-access-gate.test.mjs
+          fi
+          node --test tests/work-schedule-excel.test.mjs tests/work-schedule-scheduler.test.mjs
+      - run: npm run build

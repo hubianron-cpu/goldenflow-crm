@@ -92,11 +92,12 @@ function buildCandidates(
   role: EmployeeRole,
   state: AssignmentState,
   dayIndexes: Map<string, number>,
+  assignedToShift: string[],
 ) {
   const candidates: Candidate[] = [];
 
   for (const employee of employees) {
-    if (!employee.activeForScheduling || employee.role !== role) {
+    if (!employee.activeForScheduling || employee.role !== role || assignedToShift.includes(employee.employeeName)) {
       continue;
     }
 
@@ -240,9 +241,7 @@ function fillSlots({
   const assigned: string[] = [];
 
   for (let slot = 0; slot < slots; slot += 1) {
-    const candidates = buildCandidates(employees, availability, assignment.requirement, role, state, dayIndexes).filter(
-      (candidate) => !assigned.includes(candidate.employee.employeeName),
-    );
+    const candidates = buildCandidates(employees, availability, assignment.requirement, role, state, dayIndexes, assigned);
 
     const greenCandidates = sortCandidates(
       candidates.filter((candidate) => candidate.availability === "green"),

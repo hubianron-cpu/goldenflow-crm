@@ -51,6 +51,9 @@ export default function RegisterPage() {
             <Link className="text-sm font-bold text-gold-soft hover:text-gold" href="/login">
               חזרה להתחברות
             </Link>
+            <p className="mt-4 text-sm text-zinc-400">
+              לפני פתיחת החשבון אפשר לעיין ב־<a href="https://www.goldenflowcrm.com/privacy" className="font-semibold text-gold-soft underline underline-offset-4 hover:text-gold">מדיניות הפרטיות</a>
+            </p>
           </div>
         </section>
       </div>

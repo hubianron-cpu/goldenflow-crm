@@ -1,5 +1,6 @@
 import { LogOut, MessageCircle } from "lucide-react";
 import { signOut } from "@/lib/actions";
+import { CalendarDisconnectButton } from "@/components/calendar-disconnect-button";
 
 const paymentHref = "https://pay.grow.link/MjY1Mzg~e922098df1d5178742779aad9bb69e99-MzYyMzMwNA";
 const whatsappHref = `https://wa.me/972524780853?text=${encodeURIComponent("מעוניין לקבל פרטים נוספים על המנוי")}`;
@@ -41,6 +42,11 @@ export default function UpgradePage() {
         <p className="mx-auto mt-5 max-w-xl text-sm leading-7 text-zinc-400">
           עדיין לא בטוח? שלח לי הודעה ואעזור לך להבין אם המערכת מתאימה לך.
         </p>
+
+        <div className="mx-auto mt-6 max-w-xl border-t border-white/10 pt-5">
+          <p className="text-sm leading-7 text-zinc-400">חיברת יומן Google? אפשר לנתק אותו גם בלי מנוי פעיל. הניתוק מסיר את החיבור ואת עותקי האירועים המסונכרנים; הוצאות ידניות נשארות.</p>
+          <CalendarDisconnectButton />
+        </div>
 
         <form action={signOut} className="mx-auto mt-6 max-w-sm border-t border-white/10 pt-5">
           <p className="text-sm text-zinc-400">רוצה להתחבר עם משתמש אחר?</p>
