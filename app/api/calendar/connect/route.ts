@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
 import { expenseContext, expenseError } from "@/lib/expenses/access";
+import { calendarAccessAllowed } from "@/lib/calendar/access";
 import { calendarConfig, startConnection } from "@/lib/calendar/server";
 
 export async function POST(request: Request) {
   try {
     const context = await expenseContext(request);
     if (context.error) return context.error;
+    if (!calendarAccessAllowed(context.user.id)) return expenseError(403, "חיבור היומן זמין כרגע רק לחשבונות בדיקה מורשים.");
     const config = calendarConfig();
     if (!config) return expenseError(503, "חיבור Google Calendar עדיין אינו זמין. אפשר להוסיף הוצאות ידנית.");
     if (new URL(config.redirectUri).origin !== new URL(request.url).origin) return expenseError(503, "חיבור היומן אינו מוגדר לסביבה הזו.");

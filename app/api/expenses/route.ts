@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { expenseContext, expenseError } from "@/lib/expenses/access";
 import { calendarAdmin, calendarConfig, readConnection } from "@/lib/calendar/server";
+import { calendarAccessAllowed } from "@/lib/calendar/access";
 import { addDays, dateKey, DEFAULT_TIME_ZONE, parseAmount, validDate, type CalendarEvent, type ExpenseData, type ManualExpense } from "@/lib/expenses/model";
 
 export const dynamic = "force-dynamic";
@@ -33,7 +34,7 @@ export async function GET() {
     const today = dateKey(new Date(), timeZone);
     const result: ExpenseData = { manual, events, today, timeZone, connection: {
       connected: Boolean(connection?.token_ciphertext), reconnect: Boolean(connection?.reconnect_required),
-      lastSync: connection?.last_synced_at ?? null, configured: Boolean(calendarConfig()),
+      lastSync: connection?.last_synced_at ?? null, configured: calendarAccessAllowed(user.id) && Boolean(calendarConfig()),
       stale: calendarUnavailable || Boolean(connection?.token_ciphertext && (!connection.last_synced_at || Date.now() - Date.parse(connection.last_synced_at) > 86400000 || !connection.sync_until || connection.sync_until < addDays(today, 90))),
     } };
     return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });

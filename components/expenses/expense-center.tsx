@@ -154,7 +154,8 @@ export function ExpenseCenter() {
     </details>}
     {data && (connected || data.connection.reconnect) && <footer className={`flex flex-wrap items-center gap-3 text-xs ${secondary}`}>
       {data.connection.lastSync && <span>סנכרון אחרון: {new Intl.DateTimeFormat("he-IL", { dateStyle: "short", timeStyle: "short", timeZone: data.timeZone }).format(new Date(data.connection.lastSync))}</span>}
-      {connected && <button className="button-secondary gap-2" disabled={busy} onClick={() => void action("/api/calendar/sync", "POST")}><RefreshCw size={14} aria-hidden="true" />{busy ? "מסנכרן / מעדכן..." : "סנכרון היומן"}</button>}
+      {connected && <button className="button-secondary gap-2" disabled={busy || !data.connection.configured} onClick={() => void action("/api/calendar/sync", "POST")}><RefreshCw size={14} aria-hidden="true" />{busy ? "מסנכרן / מעדכן..." : "סנכרון היומן"}</button>}
+      {connected && !data.connection.configured && <span>סנכרון היומן אינו זמין כרגע. אפשר לנתק את היומן.</span>}
       <button className="button-secondary" disabled={busy} onClick={() => { if (window.confirm("לנתק את היומן ולהסיר את עותק אירועי היומן מ-GoldenFlow? ההוצאות הידניות יישארו.")) void action("/api/calendar/disconnect", "POST"); }}>ניתוק היומן</button>
     </footer>}
     {draft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-3" onClick={e => { if (e.target === e.currentTarget && !busy) setDraft(null); }}>

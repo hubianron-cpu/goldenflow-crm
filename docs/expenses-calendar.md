@@ -14,6 +14,8 @@ Enable Google Calendar API, configure the OAuth consent screen and a Web applica
 - `CALENDAR_TOKEN_ENCRYPTION_KEY` (32 cryptographically random bytes encoded as base64; never a NEXT_PUBLIC variable)
 - Existing `SUPABASE_SERVICE_ROLE_KEY` is reused only on the server.
 
+Calendar access is off by default, even when all Google credentials are present. Set server-only `GOOGLE_CALENDAR_ACCESS_MODE=qa` with comma-separated Supabase Auth UUIDs in `GOOGLE_CALENDAR_QA_USER_IDS` for controlled QA. Unlisted users cannot connect, finish an OAuth callback or sync. `public` mode is reserved for a separately approved public OAuth release; do not enable it while Google verification is pending. Keep QA IDs branch-scoped in Preview. Disconnect remains available to every authenticated user, including users whose subscription access has expired.
+
 Never commit keys or paste them into chat. Keep the encryption key stable; rotating it requires reconnecting calendars. Add QA Google accounts as test users while the consent screen is in testing. External production use may require Google verification. Missing configuration disables connection but not manual expenses.
 
 Scope: `https://www.googleapis.com/auth/calendar.events.readonly`. Primary calendar only in V1. OAuth uses expiring, single-use owner-bound state, HttpOnly SameSite cookie and PKCE. Refresh tokens are AES-256-GCM encrypted with owner AAD; access tokens are transient. Client roles cannot read connection credentials or write Calendar snapshots.
