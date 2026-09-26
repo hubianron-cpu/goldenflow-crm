@@ -119,7 +119,9 @@ test("shared sync drives both consumers; partial provider failure never publishe
   assert.ok(Date.parse(h.rows.get("QA-A").sync_lease_until) < Date.now());
 });
 test("revoked grants require reconnect; sync lease prevents overlap; disconnect revokes", async () => {
-  const h = harness(); let auth = await h.api.startConnection("QA-A");
+  const h = harness();
+  assert.equal(await h.api.disconnectCalendar("QA-A"), false);
+  let auth = await h.api.startConnection("QA-A");
   await h.api.finishConnection("QA-A", "code", auth.state);
   h.rows.get("QA-A").sync_lease_until = new Date(Date.now() + 60000).toISOString();
   await assert.rejects(h.api.syncCalendar("QA-A"));
@@ -130,7 +132,7 @@ test("revoked grants require reconnect; sync lease prevents overlap; disconnect 
   h.setFailure(""); auth = await h.api.startConnection("QA-A");
   await h.api.finishConnection("QA-A", "code", auth.state);
   assert.equal(h.rows.get("QA-A").reconnect_required, false);
-  await h.api.disconnectCalendar("QA-A");
+  assert.equal(await h.api.disconnectCalendar("QA-A"), true);
   assert.equal(h.rows.has("QA-A"), false);
   assert.ok(h.calls.includes("https://oauth2.googleapis.com/revoke"));
 });

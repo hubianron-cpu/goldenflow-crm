@@ -36,7 +36,7 @@ jobs:
           done
           node --test .test-dist/tests/*.test.js
           if [[ -f tests/calendar-server.test.mjs ]]; then
-            node --test tests/calendar-server.test.mjs
+            node --test tests/calendar-server.test.mjs tests/calendar-disconnect-access.test.mjs
           fi
           node --test tests/work-schedule-excel.test.mjs tests/work-schedule-scheduler.test.mjs
       - run: npm run build

@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { expenseContext, expenseError } from "@/lib/expenses/access";
+import { calendarDisconnectContext, expenseError } from "@/lib/expenses/access";
 import { disconnectCalendar } from "@/lib/calendar/server";
 
 export async function POST(request: Request) {
   try {
-    const context = await expenseContext(request);
+    const context = await calendarDisconnectContext(request);
     if (context.error) return context.error;
-    await disconnectCalendar(context.user.id);
-    return NextResponse.json({ ok: true });
+    const disconnected = await disconnectCalendar(context.user.id);
+    return NextResponse.json({ ok: true, disconnected });
   } catch { return expenseError(); }
 }
