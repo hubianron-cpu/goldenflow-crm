@@ -3,6 +3,7 @@ import { timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
 import type { Database, Json } from "@/types/database";
 import { growAuditPayload } from "@/lib/grow/audit";
+import { isAffiliateTrackingEnabled, recordAffiliateConversion } from "@/lib/affiliate";
 import { canReactivateFromGrowPayment, updatedGrowMandateId } from "@/lib/subscription-cancellation";
 
 export const runtime = "nodejs";
@@ -600,6 +601,18 @@ export async function POST(request: Request) {
     if (!activationResult.activated) {
       await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
       return jsonResponse({ ok: true, ignored: true, reason: activationResult.reason });
+    }
+
+    // A verified first payment becomes an attribution candidate. Payout is reconciled manually,
+    // including refunds, and is never triggered from this webhook.
+    if (isAffiliateTrackingEnabled()) {
+      await recordAffiliateConversion(
+        serviceSupabase,
+        user.id,
+        details.transactionCode,
+        details.paymentSum,
+        details.paymentDate,
+      );
     }
 
     await saveWebhookEvent(serviceSupabase, auditPayload, "subscription_activated", details.transactionCode, user.id);
