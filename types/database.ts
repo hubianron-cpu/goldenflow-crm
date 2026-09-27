@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      affiliate_referrals: {
+        Row: {
+          id: string;
+          click_token: string;
+          affiliate_code: string;
+          clicked_at: string;
+          expires_at: string;
+          user_id: string | null;
+          conversion_transaction_code: string | null;
+          conversion_amount: number | null;
+          converted_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          click_token: string;
+          affiliate_code: string;
+          clicked_at?: string;
+          expires_at: string;
+          user_id?: string | null;
+          conversion_transaction_code?: string | null;
+          conversion_amount?: number | null;
+          converted_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          click_token?: string;
+          affiliate_code?: string;
+          clicked_at?: string;
+          expires_at?: string;
+          user_id?: string | null;
+          conversion_transaction_code?: string | null;
+          conversion_amount?: number | null;
+          converted_at?: string | null;
+        };
+        Relationships: [];
+      };
       agent_integration_credentials: {
         Row: {
           created_at: string;
