@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { ATTRIBUTION_DAYS, createReferralClick, isAffiliateTrackingEnabled, isAllowedAffiliate, REFERRAL_COOKIE } from "@/lib/affiliate";
+import { createReferralClick, getActiveReferralClick, isAffiliateTrackingEnabled, isAllowedAffiliate, REFERRAL_COOKIE } from "@/lib/affiliate";
 import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -15,20 +15,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
   try {
     const client = getSupabaseAdminClient();
     if (!client) throw new Error("Affiliate database unavailable");
-    const token = await createReferralClick(client, code);
-    if (!token) throw new Error("Affiliate code unavailable");
+    const existingToken = request.cookies.get(REFERRAL_COOKIE)?.value;
+    const referral = await getActiveReferralClick(client, existingToken, code) ?? await createReferralClick(client, code);
+    if (!referral) throw new Error("Affiliate code unavailable");
 
     const response = NextResponse.redirect(new URL("/register", request.url));
-    response.cookies.set(REFERRAL_COOKIE, token, {
+    response.cookies.set(REFERRAL_COOKIE, referral.token, {
       httpOnly: true,
-      maxAge: ATTRIBUTION_DAYS * 24 * 60 * 60,
+      expires: referral.expiresAt,
       path: "/",
       sameSite: "lax",
       secure: process.env.NODE_ENV === "production",
     });
     return response;
-  } catch (error) {
-    console.error("AFFILIATE_CLICK_FAILED", error);
+  } catch {
+    console.error("AFFILIATE_CLICK_FAILED");
     return new NextResponse("קישור השותף אינו זמין כרגע", { status: 503 });
   }
 }

@@ -17,18 +17,37 @@ export function isAllowedAffiliate(code: string) {
   return AFFILIATE_CODES.has(code);
 }
 
+export async function getActiveReferralClick(
+  client: SupabaseClient<Database>,
+  token: string | undefined,
+  code: string,
+  now = new Date(),
+) {
+  if (!token || !/^[0-9a-f-]{36}$/i.test(token)) return null;
+  const { data, error } = await client.from("affiliate_referrals")
+    .select("expires_at")
+    .eq("click_token", token)
+    .eq("affiliate_code", code)
+    .is("user_id", null)
+    .gt("expires_at", now.toISOString())
+    .maybeSingle();
+  if (error) throw error;
+  return data ? { token, expiresAt: new Date(data.expires_at) } : null;
+}
+
 export async function createReferralClick(client: SupabaseClient<Database>, code: string, now = new Date()) {
   if (!isAllowedAffiliate(code)) return null;
 
   const token = randomUUID();
+  const expiresAt = new Date(now.getTime() + WINDOW_MS);
   const { error } = await client.from("affiliate_referrals").insert({
     affiliate_code: code,
     click_token: token,
     clicked_at: now.toISOString(),
-    expires_at: new Date(now.getTime() + WINDOW_MS).toISOString(),
+    expires_at: expiresAt.toISOString(),
   });
   if (error) throw error;
-  return token;
+  return { token, expiresAt };
 }
 
 export async function claimReferral(
@@ -60,6 +79,13 @@ export function paymentTime(paymentDate: string, receivedAt: Date) {
   return receivedAt;
 }
 
+export function isEligibleAffiliatePayment(transactionCode: string, amount: number | null, payerEmail: string, userEmail: string | undefined) {
+  return Boolean(transactionCode.trim())
+    && amount !== null && Number.isFinite(amount) && amount > 0
+    && Boolean(payerEmail) && Boolean(userEmail)
+    && payerEmail.trim().toLowerCase() === userEmail?.trim().toLowerCase();
+}
+
 export async function recordAffiliateConversion(
   client: SupabaseClient<Database>,
   userId: string,
@@ -79,9 +105,7 @@ export async function recordAffiliateConversion(
   if (lookupError) throw lookupError;
   if (!referral) return false;
 
-  if (!transactionCode || amount === null || !Number.isFinite(amount) || amount < 0) {
-    throw new Error("AFFILIATE_CONVERSION_PAYMENT_DATA_MISSING");
-  }
+  if (!transactionCode.trim() || amount === null || !Number.isFinite(amount) || amount <= 0) return false;
 
   const { data, error } = await client.from("affiliate_referrals")
     .update({
