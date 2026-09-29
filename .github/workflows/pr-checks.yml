@@ -29,7 +29,8 @@ jobs:
             tests/tsconfig.sales-activity.json \
             tests/tsconfig.expenses.json \
             tests/tsconfig.grow-audit.json \
-            tests/tsconfig.subscription-cancellation.json; do
+            tests/tsconfig.subscription-cancellation.json \
+            tests/tsconfig.affiliate.json; do
             if [[ -f "$config" ]]; then
               npx tsc -p "$config"
             fi
