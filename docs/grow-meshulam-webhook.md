@@ -72,9 +72,15 @@ and return HTTP 500 so the provider can retry safely.
 - `tests/grow-staging-concurrency.mjs <synthetic-user-id>` is an opt-in local runner
   for the actual release route against Staging, not a public deployed QA endpoint.
   It requires a synthetic account with a QA-prefixed email and stores no credentials.
-- Keep the PR Draft until the new commit's CI and live Staging concurrency pass.
-- Prior Grow Sandbox evidence used a separate QA receiver. It does not prove that
-  this atomic release route has received a new real Grow Sandbox callback.
+- Keep PR #34 Draft until the remaining release and activation gates pass.
+- On 2026-10-01 the isolated receiver delegated to the exact release handler at
+  `6dee0da` and processed one real ILS 1 Grow Sandbox callback. Make run
+  `46d19e1748154729b9ecd78adabc7c03` completed successfully; provider approval had
+  Status 1 and empty Err. Staging readback showed one activation audit and one
+  first referral conversion for transaction `553047`. Both scenarios stayed OFF.
+- This proves the first real callback and acknowledgment, not autonomous provider
+  retry timing or a replay of that real callback on this head. Synthetic deployed
+  retry and live database concurrency evidence remain separate.
 
 ### Live Staging concurrency evidence (2026-10-01)
 
@@ -96,8 +102,48 @@ or a deployed HTTP ingress test. Credentials were kept in memory only. The local
 runner shut down after completion; the synthetic fixture remains pending cleanup
 approval. Earlier setup failures were caused by incomplete synthetic Auth fields,
 not payment processing; those fields were corrected only for this fixture.
-The new commit's GitHub Actions results are still pending. Keep PR #34 Draft;
-no merge or Production migration/deployment is authorized by this evidence.
+GitHub Actions run `36798957641` completed successfully on release commit
+`6dee0da0016690187aea6fa0ea3b8a76f7e1ba95`, including SQL and independent-session
+concurrency tests. Keep PR #34 Draft; no merge or Production migration/deployment
+is authorized by this evidence. See `grow-sandbox-release-checklist.md` for the
+historical preparation and the updated acceptance evidence below.
+
+## Affiliate activation and release prerequisites
+
+The current local follow-up uses `create_affiliate_click(text)` instead of a direct
+insert. It serializes new clicks per partner in Postgres and caps them at 60 per
+rolling minute and 500 per rolling hour, shared across serverless instances.
+No visitor IP or new persistent limiter table is stored. Existing valid unclaimed
+cookies retain their original expiry without consuming new-click capacity.
+Capacity exhaustion returns HTTP 429 with Retry-After; database errors or a missing
+RPC fail closed with HTTP 503. These are global partner caps, not per-person limits:
+an attacker can exhaust availability, but cannot create unlimited click rows through
+the application route. Consider edge-level abuse protection if traffic warrants it.
+
+Apply only approved missing prerequisites in this order before deployment/activation:
+base Grow schema and cancellation/access fields; affiliate-referrals migration;
+atomic Grow processing migration; `20261001025829_affiliate_click_rate_limit.sql`.
+Also apply `20261001044306_grow_subscription_payment_statuses.sql` before app
+deployment: Production's current status check rejects payment_failed. Production
+read-only schema/aggregate findings are recorded in affiliate-production-readiness.md.
+Verify server-only RPC execution, required table grants, RLS and PostgREST reload.
+Tracking OFF does not bypass the atomic payment RPC requirement.
+
+Local helper/route tests passed for the follow-up. Disposable Postgres 17 minute/hour,
+window recovery and privileges tests passed as service_role. Twenty independent
+concurrent sessions with 58 existing minute-window rows created exactly two rows
+and rejected 18 requests; the final count remained 60. Tests are also wired into
+CI, which has NOT yet run for this uncommitted follow-up. Prior green CI and Sandbox
+evidence apply to `6dee0da`, not a later untested head. Production read-only schema,
+privilege and legacy event compatibility checks completed read-only; missing
+migrations and orphaned historical retries remain release considerations.
+
+Affiliate disclosure and manual first-payment/refund/commission reconciliation
+must be approved before tracking is enabled. Attribution expiry is NOT a database
+deletion policy. Do not claim expired click rows are automatically deleted.
+See `affiliate-release-policy.md` for the draft disclosure and operational gates.
+Temporary receiver expiry blocks processing but does not delete deployments or QA
+accounts. Cleanup requires separate approval; do not extend or delete implicitly.
 
 ## User matching
 

@@ -902,6 +902,10 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      create_affiliate_click: {
+        Args: { p_code: string };
+        Returns: { status: string; token?: string; expires_at?: string };
+      };
       process_grow_callback: {
         Args: { p_user_id: string | null; p_event: Json };
         Returns: Json;

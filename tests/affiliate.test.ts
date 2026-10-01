@@ -2,11 +2,43 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "../types/database";
-import { getActiveReferralClick, isEligibleAffiliatePayment, paymentTime } from "../lib/affiliate";
+import { AffiliateRateLimitError, createReferralClick, getActiveReferralClick, isEligibleAffiliatePayment, paymentTime } from "../lib/affiliate";
 
 const clickedAt = new Date("2026-09-01T12:00:00.000Z");
 const expiresAt = "2026-10-01T12:00:00.000Z";
 const token = "a8e1188c-f236-4f19-a393-a221f7a250aa";
+
+function clickClient(data: unknown, error: unknown = null) {
+  const calls: unknown[] = [];
+  return {
+    calls,
+    client: { rpc: async (...args: unknown[]) => {
+      calls.push(args);
+      return { data, error };
+    }, from: () => { throw new Error("Direct insert must not bypass the shared limit"); } } as unknown as SupabaseClient<Database>,
+  };
+}
+
+test("click creation uses the shared RPC and database expiry", async () => {
+  const db = clickClient({ status: "created", token, expires_at: expiresAt });
+  assert.deepEqual(await createReferralClick(db.client, "amitifargan"), { token, expiresAt: new Date(expiresAt) });
+  assert.deepEqual(db.calls, [["create_affiliate_click", { p_code: "amitifargan" }]]);
+});
+
+test("exhausted shared capacity produces a typed rate limit without fallback", async () => {
+  await assert.rejects(createReferralClick(clickClient({ status: "rate_limited" }).client, "amitifargan"), AffiliateRateLimitError);
+});
+
+test("missing RPC and invalid response fail closed", async () => {
+  await assert.rejects(createReferralClick(clickClient(null, new Error("missing RPC")).client, "amitifargan"));
+  await assert.rejects(createReferralClick(clickClient({ status: "created" }).client, "amitifargan"));
+});
+
+test("unknown partner does not invoke the database", async () => {
+  const db = clickClient(null);
+  assert.equal(await createReferralClick(db.client, "other"), null);
+  assert.equal(db.calls.length, 0);
+});
 
 function referralClient() {
   const filters: Array<[string, unknown]> = [];

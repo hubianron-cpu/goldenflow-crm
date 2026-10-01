@@ -1,10 +1,15 @@
-import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 export const REFERRAL_COOKIE = "goldenflow_crm_referral";
 export const ATTRIBUTION_DAYS = 30;
-const WINDOW_MS = ATTRIBUTION_DAYS * 24 * 60 * 60 * 1000;
+
+export class AffiliateRateLimitError extends Error {
+  constructor() {
+    super("Affiliate click rate limit reached");
+    this.name = "AffiliateRateLimitError";
+  }
+}
 
 // V1: deliberately allow only registered partners, not arbitrary ref values.
 const AFFILIATE_CODES = new Set(["amitifargan"]);
@@ -35,19 +40,18 @@ export async function getActiveReferralClick(
   return data ? { token, expiresAt: new Date(data.expires_at) } : null;
 }
 
-export async function createReferralClick(client: SupabaseClient<Database>, code: string, now = new Date()) {
+export async function createReferralClick(client: SupabaseClient<Database>, code: string) {
   if (!isAllowedAffiliate(code)) return null;
 
-  const token = randomUUID();
-  const expiresAt = new Date(now.getTime() + WINDOW_MS);
-  const { error } = await client.from("affiliate_referrals").insert({
-    affiliate_code: code,
-    click_token: token,
-    clicked_at: now.toISOString(),
-    expires_at: expiresAt.toISOString(),
-  });
+  // The shared database limit cannot be bypassed by switching serverless instances.
+  const { data, error } = await client.rpc("create_affiliate_click", { p_code: code });
   if (error) throw error;
-  return { token, expiresAt };
+  if (data?.status === "rate_limited") throw new AffiliateRateLimitError();
+  if (data?.status !== "created" || typeof data.token !== "string"
+    || typeof data.expires_at !== "string" || Number.isNaN(Date.parse(data.expires_at))) {
+    throw new Error("Invalid affiliate click response");
+  }
+  return { token: data.token, expiresAt: new Date(data.expires_at) };
 }
 
 export async function claimReferral(

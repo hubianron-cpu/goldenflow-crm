@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createReferralClick, getActiveReferralClick, isAffiliateTrackingEnabled, isAllowedAffiliate, REFERRAL_COOKIE } from "@/lib/affiliate";
+import { AffiliateRateLimitError, createReferralClick, getActiveReferralClick, isAffiliateTrackingEnabled, isAllowedAffiliate, REFERRAL_COOKIE } from "@/lib/affiliate";
 import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 
@@ -28,7 +28,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       secure: process.env.NODE_ENV === "production",
     });
     return response;
-  } catch {
+  } catch (error) {
+    if (error instanceof AffiliateRateLimitError) {
+      return new NextResponse("יותר מדי בקשות לקישור השותף. נסו שוב מאוחר יותר.", {
+        status: 429,
+        headers: { "Retry-After": "60", "Cache-Control": "no-store" },
+      });
+    }
     console.error("AFFILIATE_CLICK_FAILED");
     return new NextResponse("קישור השותף אינו זמין כרגע", { status: 503 });
   }
