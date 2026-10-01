@@ -40,3 +40,9 @@ npm run dev
 - `components/` רכיבי UI משותפים
 - `lib/` Supabase actions ו-helper functions
 - `supabase/schema.sql` סכמת בסיס הנתונים
+
+## קריאת מנויים עבור הלוח השבועי
+
+`GET /api/integrations/weekly-dashboard` מחזיר מצבת מנויים פעילים נוכחית בלבד, ללא פרטי חשבונות. דורש כותרת `Authorization: Bearer <key>` ומפתח שרת ייעודי `WEEKLY_DASHBOARD_READ_KEY` באורך 32 תווים לפחות. אין להשתמש במפתח Supabase, לשמור את הערך ב־Git או להוסיף `NEXT_PUBLIC_` לשמו. ללא הגדרה הנתיב מחזיר 503; ללא אימות הוא מחזיר 401 לפני גישה למסד. הספירה אינה הוכחת גבייה ואינה משנה מנויים או סכמות.
+
+בדיקת החיבור המבודדת: `node --test tests/weekly-dashboard.test.mjs`.
