@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { claimReferral, isAffiliateTrackingEnabled, REFERRAL_COOKIE } from "@/lib/affiliate";
 import { hasSupabaseEnv } from "@/lib/env";
 import { checkRateLimit, getClientIp, getRateLimitResponseHeaders } from "@/lib/security/rate-limit";
 import { getSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -167,6 +169,23 @@ export async function POST(request: Request) {
   if (subscriptionError) {
     await serviceSupabase.auth.admin.deleteUser(userId);
     return jsonError(GENERIC_REGISTER_ERROR, 500);
+  }
+
+  // The visit token is server-owned and expires 30 days after the partner link was opened.
+  // Registration succeeds independently; a claim failure remains visible in server logs.
+  if (isAffiliateTrackingEnabled()) {
+    const token = (await cookies()).get(REFERRAL_COOKIE)?.value;
+    if (token) {
+      try {
+        const claimed = await claimReferral(serviceSupabase, token, userId);
+        if (!claimed) console.warn("AFFILIATE_REFERRAL_NOT_CLAIMED", { userId });
+      } catch (claimError) {
+        console.error("AFFILIATE_REFERRAL_CLAIM_FAILED", {
+          userId,
+          code: claimError && typeof claimError === "object" && "code" in claimError ? claimError.code : null,
+        });
+      }
+    }
   }
 
   return NextResponse.json(

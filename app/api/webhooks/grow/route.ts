@@ -1,42 +1,20 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createClient, type SupabaseClient, type User } from "@supabase/supabase-js";
-import type { Database, Json } from "@/types/database";
+import type { Database } from "@/types/database";
 import { growAuditPayload } from "@/lib/grow/audit";
-import { canReactivateFromGrowPayment, updatedGrowMandateId } from "@/lib/subscription-cancellation";
+import { classifyGrowPaymentStatus } from "@/lib/grow/payment-status";
+import { isAffiliateTrackingEnabled, paymentTime } from "@/lib/affiliate";
 
 export const runtime = "nodejs";
 
 type AdminClient = SupabaseClient<Database>;
 type WebhookPayload = Record<string, unknown>;
-type EventType = "payment_failed" | "subscription_activated" | "ignored";
-type SupabaseErrorLike = {
-  code?: string;
-  details?: string;
-  hint?: string;
-  message?: string;
-};
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const FAILURE_WORDS = ["fail", "failed", "failure", "declined", "denied", "error", "cancel", "cancelled", "rejected", "refused", "סורב", "נכשל"];
 
 function jsonResponse(body: Record<string, unknown>, status = 200) {
   return NextResponse.json(body, { status });
-}
-
-function logSupabaseError(label: string, error: SupabaseErrorLike) {
-  console.error(label, {
-    code: error.code,
-  });
-}
-
-function logGrowEventError(label: string, error: SupabaseErrorLike, context: Record<string, unknown>) {
-  console.error(label, {
-    table: context.table,
-    eventType: context.eventType,
-    code: error.code,
-    schema: "public",
-  });
 }
 
 function getGrowWebhookKey() {
@@ -263,16 +241,12 @@ function getWebhookDetails(payload: WebhookPayload) {
   const status = getField(payload, ["status"]);
   const statusCode = getField(payload, ["statusCode"]);
   const errorMessage = getField(payload, ["error_message"]);
-  const combinedStatusText = `${status} ${statusCode} ${errorMessage}`.toLowerCase();
-  const normalizedStatus = status.toLowerCase();
-  const hasFailureSignal = Boolean(errorMessage) || FAILURE_WORDS.some((word) => combinedStatusText.includes(word));
-  const hasSuccessSignal = normalizedStatus === "success";
+  const paymentStatus = classifyGrowPaymentStatus(payload, status, statusCode, errorMessage);
 
   return {
     directDebitId,
     errorMessage,
-    isFailedPayment: hasFailureSignal,
-    isSuccessfulPayment: !hasFailureSignal && hasSuccessSignal,
+    ...paymentStatus,
     payerEmail,
     paymentDate,
     paymentSum,
@@ -364,166 +338,6 @@ async function findMatchingUser(serviceSupabase: AdminClient, payload: WebhookPa
   return getUserByEmail(serviceSupabase, details.payerEmail);
 }
 
-async function hasProcessedTransaction(serviceSupabase: AdminClient, transactionCode: string) {
-  if (!transactionCode) {
-    return false;
-  }
-
-  console.info("GROW_EVENT_LOOKUP_STARTED");
-
-  const { data, error } = await serviceSupabase
-    .from("grow_webhook_events")
-    .select("id")
-    .eq("transaction_code", transactionCode)
-    .maybeSingle();
-
-  if (error) {
-    logGrowEventError("GROW_EVENT_LOOKUP_FAILED", error, {
-      table: "grow_webhook_events",
-      transactionCode,
-    });
-    throw new Error("GROW_EVENT_LOOKUP_FAILED");
-  }
-
-  if (!data) {
-    console.info("GROW_EVENT_LOOKUP_NO_EXISTING_EVENT");
-    return false;
-  }
-
-  console.info("GROW_EVENT_DUPLICATE_IGNORED");
-  return true;
-}
-
-async function saveWebhookEvent(
-  serviceSupabase: AdminClient,
-  auditPayload: Json,
-  eventType: EventType,
-  transactionCode: string,
-  userId: string | null,
-) {
-  const { error } = await serviceSupabase.from("grow_webhook_events").insert({
-    event_type: eventType,
-    payload: auditPayload,
-    processed_at: new Date().toISOString(),
-    created_at: new Date().toISOString(),
-    transaction_code: transactionCode || null,
-    user_id: userId,
-  });
-
-  if (error) {
-    if (error.code === "23505") {
-      console.info("GROW_EVENT_DUPLICATE_IGNORED", { eventType });
-      return;
-    }
-
-    logGrowEventError("GROW_EVENT_INSERT_FAILED", error, {
-      eventType,
-      table: "grow_webhook_events",
-      transactionCode,
-    });
-    throw new Error("GROW_EVENT_INSERT_FAILED");
-  }
-
-  console.info("GROW_EVENT_INSERTED", { eventType });
-}
-
-async function activateSubscription(
-  serviceSupabase: AdminClient,
-  userId: string,
-  details: ReturnType<typeof getWebhookDetails>,
-) {
-  const nowIso = new Date().toISOString();
-  console.info("GROW_SUBSCRIPTION_LOOKUP_STARTED");
-
-  const { data: existingSubscription, error: existingError } = await serviceSupabase
-    .from("user_subscriptions")
-    .select("user_id,created_at,trial_start_at,upgraded_at,grow_direct_debit_id,renewal_cancelled_at")
-    .eq("user_id", userId)
-    .maybeSingle();
-
-  if (existingError) {
-    logSupabaseError("GROW_SUBSCRIPTION_LOOKUP_FAILED", existingError);
-    throw new Error("GROW_SUBSCRIPTION_LOOKUP_FAILED");
-  }
-
-  if (!existingSubscription) {
-    console.info("GROW_SUBSCRIPTION_NOT_FOUND");
-    return { activated: false, reason: "missing_subscription" as const };
-  }
-
-  if (!canReactivateFromGrowPayment(
-    existingSubscription.renewal_cancelled_at,
-    existingSubscription.grow_direct_debit_id,
-    details.directDebitId,
-  )) {
-    console.info("GROW_CANCELLED_MANDATE_SUCCESS_IGNORED");
-    return { activated: false, reason: "cancelled_mandate" as const };
-  }
-
-  const payload = {
-    grow_direct_debit_id: updatedGrowMandateId(existingSubscription.grow_direct_debit_id, details.directDebitId),
-    grow_last_payment_date: details.paymentDate || nowIso,
-    grow_last_payment_sum: details.paymentSum,
-    grow_transaction_code: details.transactionCode || null,
-    plan_name: "monthly",
-    status: "active" as const,
-    updated_at: nowIso,
-    upgraded_at: existingSubscription?.upgraded_at || nowIso,
-    user_id: userId,
-    ...(existingSubscription.renewal_cancelled_at ? { renewal_cancelled_at: null, access_until: null } : {}),
-  };
-
-  console.info("GROW_SUBSCRIPTION_UPDATE_STARTED");
-  let update = serviceSupabase.from("user_subscriptions").update(payload).eq("user_id", userId);
-  if (existingSubscription.renewal_cancelled_at && existingSubscription.grow_direct_debit_id) {
-    update = update
-      .eq("grow_direct_debit_id", existingSubscription.grow_direct_debit_id)
-      .eq("renewal_cancelled_at", existingSubscription.renewal_cancelled_at);
-  } else {
-    update = update.is("renewal_cancelled_at", null);
-  }
-  const result = await update.select("user_id").maybeSingle();
-
-  if (result.error) {
-    logSupabaseError("GROW_SUBSCRIPTION_UPDATE_FAILED", result.error);
-    throw new Error("GROW_SUBSCRIPTION_ACTIVATION_FAILED");
-  }
-
-  if (!result.data) {
-    console.info("GROW_SUBSCRIPTION_STATE_CHANGED");
-    return { activated: false, reason: "state_changed" as const };
-  }
-
-  console.info("GROW_SUBSCRIPTION_UPDATED");
-  return { activated: true, reason: "updated" as const };
-}
-
-async function markPaymentFailed(
-  serviceSupabase: AdminClient,
-  userId: string,
-  details: ReturnType<typeof getWebhookDetails>,
-) {
-  const nowIso = new Date().toISOString();
-  const { error } = await serviceSupabase
-    .from("user_subscriptions")
-    .update({
-      grow_direct_debit_id: details.directDebitId || undefined,
-      grow_last_error_message: details.errorMessage || null,
-      grow_last_payment_date: details.paymentDate || nowIso,
-      grow_last_payment_sum: details.paymentSum,
-      grow_transaction_code: details.transactionCode || undefined,
-      status: "payment_failed",
-      updated_at: nowIso,
-    })
-    .eq("user_id", userId)
-    // A verified, already-paid cancellation must not be revoked by a late failure/cancel event.
-    .is("renewal_cancelled_at", null);
-
-  if (error) {
-    logSupabaseError("GROW_PAYMENT_FAILURE_UPDATE_FAILED", error);
-    throw new Error("GROW_PAYMENT_FAILURE_UPDATE_FAILED");
-  }
-}
 
 export async function POST(request: Request) {
   console.info("Grow webhook received");
@@ -568,43 +382,29 @@ export async function POST(request: Request) {
   const auditPayload = growAuditPayload(details);
 
   try {
-    if (details.transactionCode && await hasProcessedTransaction(serviceSupabase, details.transactionCode)) {
-      return jsonResponse({ ok: true, duplicate: true });
-    }
-
-    console.info("GROW_USER_LOOKUP_STARTED");
+    if (!details.transactionCode) return jsonResponse({ error: "Transaction code is required" }, 400);
     const user = await findMatchingUser(serviceSupabase, payload, details);
-
-    if (!user) {
-      console.info("GROW_USER_NOT_FOUND");
-      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, null);
-      return jsonResponse({ ok: true, message: "No matching user found" });
+    const { data, error } = await serviceSupabase.rpc("process_grow_callback", {
+      p_user_id: user?.id || null,
+      p_event: {
+        transaction_code: details.transactionCode,
+        outcome: details.isSuccessfulPayment ? "paid" : details.isFailedPayment ? "failed" : "ignored",
+        amount: details.paymentSum,
+        direct_debit_id: details.directDebitId,
+        paid_at: paymentTime(details.paymentDate, new Date()).toISOString(),
+        audit_date: auditPayload.payment_date,
+        error_message: details.errorMessage,
+        email_matches: Boolean(user?.email && details.payerEmail &&
+          normalizeEmail(user.email) === details.payerEmail),
+        affiliate_enabled: isAffiliateTrackingEnabled(),
+      },
+    });
+    if (error || !data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("GROW_ATOMIC_PROCESSING_FAILED");
     }
-
-    console.info("GROW_USER_FOUND");
-
-    if (details.isFailedPayment) {
-      console.info("GROW_PAYMENT_FAILED_EVENT_RECEIVED");
-      await markPaymentFailed(serviceSupabase, user.id, details);
-      await saveWebhookEvent(serviceSupabase, auditPayload, "payment_failed", details.transactionCode, user.id);
-      return jsonResponse({ ok: true, status: "payment_failed" });
-    }
-
-    if (!details.isSuccessfulPayment) {
-      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
-      return jsonResponse({ ok: true, ignored: true });
-    }
-
-    const activationResult = await activateSubscription(serviceSupabase, user.id, details);
-
-    if (!activationResult.activated) {
-      await saveWebhookEvent(serviceSupabase, auditPayload, "ignored", details.transactionCode, user.id);
-      return jsonResponse({ ok: true, ignored: true, reason: activationResult.reason });
-    }
-
-    await saveWebhookEvent(serviceSupabase, auditPayload, "subscription_activated", details.transactionCode, user.id);
-
-    return jsonResponse({ ok: true, status: "active" });
+    const result = data as Record<string, unknown>;
+    const { http_status: httpStatus, ...response } = result;
+    return jsonResponse(response, typeof httpStatus === "number" ? httpStatus : 200);
   } catch {
     console.error("GROW_WEBHOOK_PROCESSING_FAILED");
     return jsonResponse({ error: "Webhook processing failed" }, 500);

@@ -10,6 +10,19 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grow_qa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,7 +42,9 @@ jobs:
             tests/tsconfig.sales-activity.json \
             tests/tsconfig.expenses.json \
             tests/tsconfig.grow-audit.json \
-            tests/tsconfig.subscription-cancellation.json; do
+            tests/tsconfig.subscription-cancellation.json \
+            tests/tsconfig.affiliate.json \
+            tests/tsconfig.grow-payment-status.json; do
             if [[ -f "$config" ]]; then
               npx tsc -p "$config"
             fi
@@ -39,4 +54,21 @@ jobs:
             node --test tests/calendar-server.test.mjs tests/calendar-disconnect-access.test.mjs tests/calendar-access-gate.test.mjs
           fi
           node --test tests/work-schedule-excel.test.mjs tests/work-schedule-scheduler.test.mjs
+          node --test tests/grow-webhook-retry.test.mjs
+          node --test tests/affiliate-route.test.mjs
+      - name: Verify atomic Grow processing on disposable Postgres
+        env:
+          GROW_TEST_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/grow_qa
+        run: |
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/grow-atomic-bootstrap.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/20260604_grow_meshulam_webhook.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/grow-production-parity.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260927211222_affiliate_referrals.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260930231614_grow_atomic_processing.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261001025829_affiliate_click_rate_limit.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261001044306_grow_subscription_payment_statuses.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/affiliate-click-limit.sql
+          psql "$GROW_TEST_DATABASE_URL" -v ON_ERROR_STOP=1 -f tests/grow-atomic.sql
+          node --test tests/grow-atomic-concurrency.test.mjs
+          node --test tests/affiliate-click-concurrency.test.mjs
       - run: npm run build
