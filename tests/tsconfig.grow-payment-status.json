@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.grow-audit.json",
+  "include": ["grow-payment-status.test.ts", "../lib/grow/payment-status.ts"]
+}
